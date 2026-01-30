@@ -21,9 +21,9 @@ cd /Users/hectorhernandez2607/Desktop/dashboard
 git init
 git add .
 git commit -m "Initial commit - lead dashboard"
-git branch -M main
+git branch -M master
 git remote add origin https://github.com/hectorhernandez72607/revive.git
-git push -u origin main
+git push -u origin master
 ```
 
 > **Important:** Never commit `backend/.env`. It’s in `.gitignore` and contains secrets.
