@@ -48,6 +48,15 @@ EXCLUDE_TERMS = (
     "facebook", "twitter", "instagram", "social media",
     "invoice", "payment received", "payment due", "subscription",
     "your account", "account update", "terms of service", "privacy policy",
+    # Meeting / calendar / forwards / non-sales
+    "reminder", "meeting invite", "meeting invitation", "calendar invite",
+    "invited you to", "you're invited", "event invite", "rsvp",
+    "forwarded", "fwd:", "fwd :",
+    "thread", "conversation", "internal", "cc:", "bcc:",
+    "survey", "feedback request", "please take our survey", "quick question",
+    "hi there", "just checking in", "following up on", "touch base",
+    "scheduled for", "reschedule", "meeting scheduled", "zoom", "teams meeting",
+    "google calendar", "outlook calendar", "add to calendar", "add to your calendar",
 )
 
 # Sender addresses containing any of these are never leads (bots, no-reply, system).
@@ -56,6 +65,7 @@ EXCLUDE_SENDER_PATTERNS = (
     "notification", "notifications", "alert", "alerts", "mailer-daemon",
     "postmaster", "bounce", "bounces", "auto@", "automated@", "system@",
     "newsletter", "news@", "marketing@", "promo@", "digest@", "mailer@",
+    "calendar", "reminders", "invite", "event",
 )
 
 
@@ -87,22 +97,26 @@ def _build_prompt(emails: list[dict]) -> str:
         body = (em.get("body_snippet") or "")[:600]
         blocks.append(f"--- Email {i} ---\nFROM: {from_}\nSUBJECT: {subj}\nBODY: {body}")
     emails_text = "\n\n".join(blocks)
-    return """You are a very strict lead classifier for a small business. Your default is NO.
+    return """You are a very strict lead classifier for a small business. Your default is NO. When in doubt, say NO.
 
 Say YES only when ALL of these are true:
-- The email is clearly from a real person (not a bot, not a system).
-- The sender is directly asking the business for something: a quote, pricing, availability, a demo, a meeting, or to buy/use the business's product or service.
-- It reads like a 1:1 business inquiry (e.g. "I'm interested in...", "Can you send me a quote for...", "Do you have availability next week?").
+- The email is clearly from a real person (not a bot, system, or automated sender).
+- The sender is directly asking the business for something commercial: a quote, pricing, availability, a demo, a booking, or to buy/use the business's product or service.
+- The email clearly shows intent to do business (e.g. mentions pricing, quote, availability, demo, booking, "interested in", "how much", "can we schedule", "would like to hire").
+- It reads like a 1:1 sales inquiry from a potential customer, not a notification, forward, or general chitchat.
 
 Always say NO for:
 - Newsletters, digests, marketing, promos, receipts, order confirmations, shipping/tracking.
 - Verification emails, OTP, login alerts, password reset, "confirm your email".
 - Job applications, support tickets, complaints, refund requests, cancellations.
-- Social network messages (LinkedIn connection, etc.), "view in browser", "unsubscribe".
+- Social network messages (LinkedIn, etc.), "view in browser", "unsubscribe".
 - Automated notifications, alerts, no-reply senders, mailing list messages, out-of-office.
-- Anything that looks like a bulk or templated message, or where the sender is clearly not a potential customer reaching out to do business.
+- Meeting invites, calendar invites, "you're invited", RSVPs, "scheduled for", reschedule, Zoom/Teams links.
+- Forwards (Fwd:), reply chains, internal threads, "following up" without a clear sales ask.
+- Surveys, feedback requests, "quick question", "just checking in", "touch base" without a concrete business request.
+- Anything bulk, templated, or where the sender is not clearly a potential customer asking to buy or get a quote.
 
-When in doubt, say NO. Only say YES when you are confident it is a direct sales lead.
+If the email could be a notification, forward, meeting invite, or non-sales message, say NO. Only say YES when you are confident it is a direct sales lead (someone asking for a quote, booking, or to use the service).
 
 For each email below, reply with exactly one word per line: YES or NO, in the same order (line 1 = Email 1, line 2 = Email 2, ...). No other text.
 
