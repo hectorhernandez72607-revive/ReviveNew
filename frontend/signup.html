@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sign up — Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="auth-page">
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <h1>Create your account</h1>
+      <p class="auth-sub">Your partner sent you here. Sign up to access your dashboard.</p>
+      <div id="errorMessage" class="error-message" style="display: none;"></div>
+      <form id="signupForm">
+        <div class="form-group">
+          <label for="email">Email *</label>
+          <input type="email" id="email" name="email" required placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="password">Password *</label>
+          <input type="password" id="password" name="password" required placeholder="At least 6 characters" minlength="6" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label for="confirm">Confirm password *</label>
+          <input type="password" id="confirm" name="confirm" required placeholder="Same as above" autocomplete="new-password">
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-submit">Sign up</button>
+        </div>
+      </form>
+      <p class="auth-footer">Already have an account? <a href="login.html">Log in</a></p>
+    </div>
+  </div>
+  <script>
+    var API = window.location.origin;
+
+    function showError(message) {
+      var errorEl = document.getElementById('errorMessage');
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+      }
+    }
+
+    function hideError() {
+      var errorEl = document.getElementById('errorMessage');
+      if (errorEl) {
+        errorEl.style.display = 'none';
+      }
+    }
+
+    document.getElementById('signupForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      hideError();
+      
+      var email = document.getElementById('email').value.trim();
+      var password = document.getElementById('password').value;
+      var confirm = document.getElementById('confirm').value;
+
+      if (!email || !password || !confirm) {
+        showError('Please fill in all fields.');
+        return;
+      }
+
+      if (password !== confirm) {
+        showError('Passwords do not match.');
+        return;
+      }
+      
+      if (password.length < 6) {
+        showError('Password must be at least 6 characters.');
+        return;
+      }
+
+      var btn = this.querySelector('.btn-submit');
+      btn.disabled = true;
+      btn.textContent = 'Signing up...';
+
+      fetch(API + '/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, password: password })
+      })
+        .then(function (res) {
+          return res.json()
+            .then(function (data) {
+              return { ok: res.ok, status: res.status, data: data };
+            })
+            .catch(function () {
+              return { ok: false, status: res.status, data: { detail: 'Invalid response from server' } };
+            });
+        })
+        .then(function (r) {
+          if (r.ok && r.data.access_token) {
+            localStorage.setItem('token', r.data.access_token);
+            window.location.href = 'index.html';
+            return;
+          }
+          var errorMsg = r.data.detail || r.data.message || 'Sign up failed. Please try again.';
+          showError(errorMsg);
+        })
+        .catch(function (err) {
+          console.error(err);
+          showError('Sign up failed. Is the backend running? Check the console for details.');
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.textContent = 'Sign up';
+        });
+    });
+  </script>
+</body>
+</html>

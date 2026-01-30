@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Connect Google Form – Setup Guide</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .setup-page { max-width: 720px; margin: 40px auto; padding: 24px; }
+    .setup-page h1 { margin-bottom: 16px; }
+    .setup-page h2 { margin: 24px 0 12px; font-size: 1.1rem; }
+    .setup-page ol, .setup-page ul { margin: 12px 0; padding-left: 24px; }
+    .setup-page li { margin: 8px 0; }
+    .setup-page code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; }
+    .setup-page pre { background: #1e1e1e; color: #eee; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; max-height: 360px; overflow-y: auto; white-space: pre; }
+    .setup-page a { color: #2563eb; }
+    .setup-script-wrap { margin: 12px 0 16px; }
+    .setup-page .btn-small { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="setup-page">
+    <h1>Connect your Google Form</h1>
+    <p>Send leads from your Google Form straight to your dashboard. Follow these steps.</p>
+
+    <h2>1. Copy the script</h2>
+    <p>Copy the script below, then open your Google Form → three dots (⋮) → <strong>Script editor</strong> → delete any existing code and paste it.</p>
+    <div class="setup-script-wrap">
+      <pre id="setupScriptBlock"></pre>
+      <button type="button" id="setupCopyScriptBtn" class="btn btn-small">Copy script</button>
+    </div>
+
+    <h2>2. Set your webhook config (if needed)</h2>
+    <p>If you opened this page from your dashboard, <code>BACKEND_BASE</code> and <code>CLIENT_SLUG</code> are already set. Otherwise, edit the two lines at the top of the script: use your backend URL (e.g. ngrok or deployed API) and your client slug from the dashboard.</p>
+
+    <h2>3. Add a trigger</h2>
+    <ol>
+      <li>In the Script editor, click the <strong>clock icon</strong> (Triggers).</li>
+      <li>Click <strong>+ Add Trigger</strong>.</li>
+      <li>Function: <code>onFormSubmit</code> · Event: <strong>From form</strong> → <strong>On form submit</strong>.</li>
+      <li>Save and authorize the script when prompted.</li>
+    </ol>
+
+    <h2>4. Test it</h2>
+    <p>Submit a test response on your form. The new lead should appear in your dashboard with source “Google Forms”.</p>
+
+    <p><a href="index.html">← Back to dashboard</a></p>
+  </div>
+
+  <script src="js/google-forms-script-template.js"></script>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var slug = params.get('slug') || 'your-client-slug';
+      var base = params.get('base') || 'https://your-deployed-url.com';
+      var pre = document.getElementById('setupScriptBlock');
+      var btn = document.getElementById('setupCopyScriptBtn');
+      if (typeof window.GOOGLE_FORMS_SCRIPT_TEMPLATE === 'string' && pre) {
+        pre.textContent = window.GOOGLE_FORMS_SCRIPT_TEMPLATE
+          .replace('{{BACKEND_BASE}}', base)
+          .replace('{{CLIENT_SLUG}}', slug);
+      }
+      if (btn && pre) {
+        btn.addEventListener('click', function () {
+          if (!pre.textContent) return;
+          navigator.clipboard.writeText(pre.textContent).then(function () {
+            btn.textContent = 'Copied!';
+            setTimeout(function () { btn.textContent = 'Copy script'; }, 1500);
+          }).catch(function () { alert('Could not copy'); });
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+{
+    "liveServer.settings.port": 5501,
+    "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/bin/python"
+}

@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Main dashboard -->
+  <div id="dashboardWrap" style="display: none;">
+    <div class="sidebar">
+      <h2 class="logo">DASH</h2>
+      <ul>
+        <li data-section="leads" class="active">Leads</li>
+        <li data-section="revenue">Revenue Recovered</li>
+        <li data-section="activity">Activity</li>
+        <li data-section="settings">Settings</li>
+      </ul>
+      <a href="#" id="logoutBtn" class="logout-link">Log out</a>
+    </div>
+
+    <div class="main">
+      <!-- Leads panel (default) -->
+      <div id="panelLeads" class="dashboard-panel active">
+      <div class="topbar">
+        <h1>Leads Dashboard</h1>
+        <button class="btn">+ Add Lead</button>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <h3>Total Leads</h3>
+          <p id="totalLeadsCount">0</p>
+        </div>
+        <div class="card">
+          <h3>Unanswered</h3>
+          <p id="unansweredCount">0</p>
+        </div>
+        <div class="card">
+          <h3>Recovered</h3>
+          <p id="recoveredCount">0</p>
+        </div>
+        <div class="card highlight">
+          <h3>Money Recovered</h3>
+          <p id="moneyRecoveredCount">$0</p>
+        </div>
+      </div>
+
+      <div class="connect-form-card" id="emailLeadsCard">
+        <h3>Email leads</h3>
+        <p class="connect-form-desc">Leads from your inbox (Gmail) are added automatically every 10 minutes. Configure IMAP in <code>backend/.env</code>.</p>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Last Contact</th>
+              <th>Source</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="leadsTableBody"></tbody>
+        </table>
+      </div>
+      </div>
+      <!-- Revenue Recovered panel -->
+      <div id="panelRevenue" class="dashboard-panel">
+        <div class="topbar">
+          <h1>Revenue Recovered</h1>
+        </div>
+        <div id="revenueEmpty" class="revenue-empty-state" style="display: none;">
+          <div class="revenue-empty-icon">📊</div>
+          <p>No recovered revenue yet</p>
+          <p class="revenue-empty-hint">Mark leads as recovered from the Leads view to see revenue here.</p>
+        </div>
+        <div id="revenueContent" class="revenue-content">
+          <div class="revenue-hero-card">
+            <span class="revenue-hero-label">Total revenue recovered</span>
+            <span id="revenueTotalSummary" class="revenue-hero-value">$0</span>
+            <span class="revenue-hero-meta" id="revenueLeadCount">0 leads</span>
+          </div>
+          <div class="panel-card revenue-chart-card">
+            <h3 class="revenue-chart-title">Cumulative revenue recovered</h3>
+            <div id="revenueChart" class="revenue-line-chart-wrap">
+              <svg id="revenueLineSvg" class="revenue-line-svg" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid meet"></svg>
+              <div id="revenueChartYAxis" class="revenue-line-yaxis" aria-hidden="true"></div>
+              <div id="revenueChartXAxis" class="revenue-line-xaxis" aria-hidden="true"></div>
+            </div>
+          </div>
+          <div class="panel-card revenue-table-card">
+            <h3 class="revenue-table-title">Breakdown</h3>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Lead</th>
+                    <th>Email</th>
+                    <th>Revenue</th>
+                  </tr>
+                </thead>
+                <tbody id="revenueTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Activity panel -->
+      <div id="panelActivity" class="dashboard-panel">
+        <div class="topbar">
+          <h1>Activity</h1>
+        </div>
+        <div class="panel-card panel-placeholder">
+          <p class="panel-empty">Activity feed coming soon. This will show recent lead additions, follow-ups, and status changes.</p>
+        </div>
+      </div>
+      <!-- Settings panel -->
+      <div id="panelSettings" class="dashboard-panel">
+        <div class="topbar">
+          <h1>Settings</h1>
+        </div>
+        <div class="panel-card">
+          <h3>Account</h3>
+          <p id="settingsClientName" class="connect-form-desc">—</p>
+          <p id="settingsClientSlug" class="connect-form-desc"><code>—</code></p>
+        </div>
+        <div class="connect-form-card" id="connectFormCard">
+          <h3>Connect your Google Form</h3>
+          <p class="connect-form-desc">Send leads from your form to this dashboard. Use this webhook in your form&rsquo;s Apps Script.</p>
+          <div class="connect-form-row">
+            <label>Webhook URL</label>
+            <div class="connect-form-input-wrap">
+              <code id="webhookUrl" class="webhook-url"></code>
+              <button type="button" id="copyWebhookBtn" class="btn btn-small">Copy</button>
+            </div>
+          </div>
+          <div class="connect-form-row">
+            <label>Client slug</label>
+            <code id="clientSlug" class="client-slug"></code>
+          </div>
+          <div class="connect-form-row">
+            <label>Google Apps Script</label>
+            <p class="connect-form-desc">Copy this entire script and paste it into your form&rsquo;s Script editor.</p>
+            <pre id="appsScriptBlock" class="script-block"></pre>
+            <button type="button" id="copyScriptBtn" class="btn btn-small">Copy script</button>
+          </div>
+          <p class="connect-form-help">
+            <a href="setup.html" id="setupGuideLink" target="_blank" rel="noopener">Setup guide</a> &middot;
+            <button type="button" id="testFollowupBtn" class="btn-link">Test follow-up</button> &middot;
+            Add an <code>onFormSubmit</code> trigger in the Script editor.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading / auth check -->
+  <div id="authCheck" class="auth-wrap">
+    <div class="auth-box" id="authCheckBox">
+      <p class="auth-sub">Loading...</p>
+    </div>
+  </div>
+
+  <div id="markRecoveredModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Mark lead recovered</h2>
+        <span class="close" data-dismiss="markRecoveredModal">&times;</span>
+      </div>
+      <form id="markRecoveredForm">
+        <input type="hidden" id="markRecoveredLeadId" name="leadId">
+        <div class="form-group">
+          <label for="revenueAmount">Revenue ($)</label>
+          <input type="number" id="revenueAmount" name="revenue" min="0" step="0.01" placeholder="0" value="0">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" id="markRecoveredCancel">Cancel</button>
+          <button type="submit" class="btn-submit">Mark recovered</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="addLeadModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Add New Lead</h2>
+        <span class="close">&times;</span>
+      </div>
+      <form id="addLeadForm">
+        <div class="form-group">
+          <label for="leadName">Name *</label>
+          <input type="text" id="leadName" name="name" required placeholder="Enter name">
+        </div>
+        <div class="form-group">
+          <label for="leadEmail">Email *</label>
+          <input type="email" id="leadEmail" name="email" required placeholder="Enter email">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" id="cancelBtn">Cancel</button>
+          <button type="submit" class="btn-submit">Add Lead</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="deleteLeadModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Delete lead</h2>
+        <span class="close" data-dismiss="deleteLeadModal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete this lead?</p>
+      </div>
+      <div class="form-actions" style="padding: 20px 24px 24px;">
+        <button type="button" class="btn-cancel" id="deleteLeadCancel">Cancel</button>
+        <button type="button" class="btn-delete-confirm" id="deleteLeadConfirm">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/google-forms-script-template.js"></script>
+  <script>
+    var API = window.location.origin;
+
+    function getToken() {
+      return localStorage.getItem('token');
+    }
+
+    function clearAuth() {
+      localStorage.removeItem('token');
+      window.location.href = 'login.html';
+    }
+
+    function authHeaders() {
+      var t = getToken();
+      return t ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t } : { 'Content-Type': 'application/json' };
+    }
+
+    var modal = document.getElementById('addLeadModal');
+    var addLeadBtn = document.querySelector('.topbar .btn');
+    var closeBtn = modal ? modal.querySelector('.close') : null;
+    var cancelBtn = document.getElementById('cancelBtn');
+    var form = document.getElementById('addLeadForm');
+    var tbody = document.getElementById('leadsTableBody');
+    var totalLeadsEl = document.getElementById('totalLeadsCount');
+    var unansweredEl = document.getElementById('unansweredCount');
+    var recoveredEl = document.getElementById('recoveredCount');
+    var moneyRecoveredEl = document.getElementById('moneyRecoveredCount');
+    var dashboardEl = document.getElementById('dashboardWrap');
+    var authCheckEl = document.getElementById('authCheck');
+    var currentClient = null;
+    var cachedLeads = [];
+
+    function escapeHtml(str) {
+      if (str == null) return '';
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function statusClass(status) {
+      if (status === 'new') return 'new';
+      if (status === 'recovered') return 'recovered';
+      return 'pending';
+    }
+
+    function formatLastContact(lead) {
+      if (!lead.last_contacted) return '\u2014';
+      var then = new Date(lead.last_contacted);
+      if (isNaN(then.getTime())) return 'Contacted';
+      var now = new Date();
+      var diffMs = now - then;
+      var diffMins = Math.floor(diffMs / 60000);
+      var diffHours = Math.floor(diffMs / 3600000);
+      var diffDays = Math.floor(diffMs / 86400000);
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return diffMins === 1 ? '1 min ago' : diffMins + ' mins ago';
+      if (diffHours < 24) return diffHours === 1 ? '1 hour ago' : diffHours + ' hours ago';
+      if (diffDays < 30) return diffDays === 1 ? '1 day ago' : diffDays + ' days ago';
+      var diffWeeks = Math.floor(diffDays / 7);
+      if (diffWeeks < 4) return diffWeeks === 1 ? '1 week ago' : diffWeeks + ' weeks ago';
+      return then.toLocaleDateString();
+    }
+
+    function leadRow(lead, source) {
+      source = source || '\u2014';
+      var tr = document.createElement('tr');
+      var statusLabel = lead.status.charAt(0).toUpperCase() + lead.status.slice(1);
+      var leftAction = '';
+      if (lead.status === 'recovered') {
+        leftAction = '<span class="recovered-badge">Recovered</span>';
+      } else {
+        leftAction = '<button type="button" class="btn-mark-contacted" data-lead-id="' + escapeHtml(String(lead.id)) + '" title="I already replied – skip auto follow-up">I contacted them</button> ';
+        leftAction += '<button type="button" class="btn-mark-recovered" data-lead-id="' + escapeHtml(String(lead.id)) + '">Mark recovered</button>';
+      }
+      var deleteBtn = '<button type="button" class="btn-delete-lead" data-lead-id="' + escapeHtml(String(lead.id)) + '" title="Delete lead"><svg class="btn-delete-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span class="btn-delete-label">Delete</span></button>';
+      tr.innerHTML =
+        '<td>' + escapeHtml(lead.name) + '</td>' +
+        '<td>' + escapeHtml(lead.email) + '</td>' +
+        '<td class="' + statusClass(lead.status) + '">' + escapeHtml(statusLabel) + '</td>' +
+        '<td>' + escapeHtml(formatLastContact(lead)) + '</td>' +
+        '<td>' + escapeHtml(source) + '</td>' +
+        '<td class="actions-cell"><div class="actions-cell-inner"><span class="actions-left">' + leftAction + '</span>' + deleteBtn + '</div></td>';
+      return tr;
+    }
+
+    function computeStats(leads) {
+      if (!leads || leads.length === 0) {
+        totalLeadsEl.textContent = '0';
+        if (unansweredEl) unansweredEl.textContent = '0';
+        if (recoveredEl) recoveredEl.textContent = '0';
+        if (moneyRecoveredEl) moneyRecoveredEl.textContent = '$0';
+        return;
+      }
+      var activeLeads = (leads || []).filter(function (l) { return l.status !== 'recovered'; });
+      var recoveredLeads = (leads || []).filter(function (l) { return l.status === 'recovered'; });
+      var unanswered = 0;
+      activeLeads.forEach(function (l) { if (l.status === 'new') unanswered++; });
+      var recovered = recoveredLeads.length;
+      var money = recoveredLeads.reduce(function (sum, l) { return sum + (l.revenue || 0); }, 0);
+      totalLeadsEl.textContent = String(activeLeads.length);
+      if (unansweredEl) unansweredEl.textContent = String(unanswered);
+      if (recoveredEl) recoveredEl.textContent = String(recovered);
+      if (moneyRecoveredEl) moneyRecoveredEl.textContent = '$' + (Math.round(money * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+
+    function renderLeads(leads) {
+      tbody.innerHTML = '';
+      computeStats(leads);
+      var activeLeads = (leads || []).filter(function (l) { return l.status !== 'recovered'; });
+      if (activeLeads.length === 0) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="6" class="no-leads">No leads yet. Add one!</td>';
+        tbody.appendChild(tr);
+        return;
+      }
+      activeLeads.forEach(function (lead) {
+        tbody.appendChild(leadRow(lead, lead.source || 'Manual'));
+      });
+      bindMarkRecoveredButtons();
+      bindMarkContactedButtons();
+      bindDeleteLeadButtons();
+    }
+
+    function bindMarkContactedButtons() {
+      tbody.querySelectorAll('.btn-mark-contacted').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = parseInt(btn.getAttribute('data-lead-id'), 10);
+          if (!id) return;
+          btn.disabled = true;
+          fetch(API + '/me/lead/' + id, {
+            method: 'PATCH',
+            headers: authHeaders(),
+            body: JSON.stringify({ mark_contacted: true })
+          })
+            .then(function (res) {
+              if (res.status === 401) { clearAuth(); return null; }
+              if (!res.ok) throw new Error('Server error');
+              return res.json();
+            })
+            .then(function () { loadLeads(); })
+            .catch(function () { alert('Failed to update.'); })
+            .finally(function () { btn.disabled = false; });
+        });
+      });
+    }
+
+    function bindMarkRecoveredButtons() {
+      tbody.querySelectorAll('.btn-mark-recovered').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = parseInt(btn.getAttribute('data-lead-id'), 10);
+          if (!id) return;
+          document.getElementById('markRecoveredLeadId').value = id;
+          document.getElementById('revenueAmount').value = '0';
+          document.getElementById('markRecoveredModal').style.display = 'block';
+        });
+      });
+    }
+
+    var deleteLeadModalEl = document.getElementById('deleteLeadModal');
+    var deleteLeadIdPending = null;
+
+    function bindDeleteLeadButtons() {
+      tbody.querySelectorAll('.btn-delete-lead').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = parseInt(btn.getAttribute('data-lead-id'), 10);
+          if (!id) return;
+          deleteLeadIdPending = id;
+          if (deleteLeadModalEl) deleteLeadModalEl.style.display = 'block';
+        });
+      });
+    }
+
+    function closeDeleteLeadModal() {
+      deleteLeadIdPending = null;
+      if (deleteLeadModalEl) deleteLeadModalEl.style.display = 'none';
+    }
+
+    function loadLeads() {
+      fetch(API + '/me/leads', { headers: authHeaders() })
+        .then(function (res) {
+          if (res.status === 401) {
+            clearAuth();
+            return null;
+          }
+          if (!res.ok) throw new Error('Server error');
+          return res.json();
+        })
+        .then(function (data) {
+          if (data) {
+            cachedLeads = data;
+            renderLeads(data);
+          }
+        })
+        .catch(function (err) {
+          console.error('Failed to load leads:', err);
+          tbody.innerHTML = '<tr><td colspan="6" class="no-leads">Could not load leads. Is the backend running on port 8000?</td></tr>';
+        });
+    }
+
+    function showAuthError(msg) {
+      localStorage.removeItem('token');
+      var box = document.getElementById('authCheckBox');
+      if (!box) return;
+      box.innerHTML =
+        '<p class="auth-sub">' + escapeHtml(msg || 'Could not verify login.') + '</p>' +
+        '<p class="auth-footer"><a href="login.html">Log in</a></p>';
+    }
+
+    function initDashboard() {
+      if (!getToken()) {
+        clearAuth();
+        return;
+      }
+      fetch(API + '/me', { headers: authHeaders() })
+        .then(function (res) {
+          return res.json()
+            .then(function (data) { return { ok: res.ok, status: res.status, data: data }; })
+            .catch(function () { return { ok: false, status: res.status, data: { detail: 'Invalid response' } }; });
+        })
+        .then(function (r) {
+          if (r.status === 401) {
+            clearAuth();
+            return;
+          }
+          if (r.ok) {
+            var me = r.data;
+            currentClient = me.client;
+            authCheckEl.style.display = 'none';
+            dashboardEl.style.display = 'flex';
+            var client = me.client;
+            document.title = 'Dashboard \u2014 ' + (client.name || client.slug);
+            var h1 = document.querySelector('.topbar h1');
+            if (h1) h1.textContent = 'Leads Dashboard \u00b7 ' + (client.name || client.slug);
+            var base = API.replace(/\/$/, '');
+            var webhookUrlEl = document.getElementById('webhookUrl');
+            var clientSlugEl = document.getElementById('clientSlug');
+            var appsScriptEl = document.getElementById('appsScriptBlock');
+            var setupLinkEl = document.getElementById('setupGuideLink');
+            if (webhookUrlEl) webhookUrlEl.textContent = base + '/webhook/lead/' + client.slug;
+            if (clientSlugEl) clientSlugEl.textContent = client.slug;
+            if (appsScriptEl && typeof window.GOOGLE_FORMS_SCRIPT_TEMPLATE === 'string') {
+              appsScriptEl.textContent = window.GOOGLE_FORMS_SCRIPT_TEMPLATE
+                .replace('{{BACKEND_BASE}}', base)
+                .replace('{{CLIENT_SLUG}}', client.slug);
+            }
+            if (setupLinkEl) setupLinkEl.href = 'setup.html?slug=' + encodeURIComponent(client.slug) + '&base=' + encodeURIComponent(base);
+            loadLeads();
+            return;
+          }
+          var detail = r.data && r.data.detail ? r.data.detail : 'Could not verify login.';
+          showAuthError(detail);
+        })
+        .catch(function (err) {
+          console.error(err);
+          showAuthError('Could not verify login. Is the backend running? Try again or log in.');
+        });
+    }
+
+    function showPanel(section) {
+      var panels = document.querySelectorAll('.dashboard-panel');
+      var items = document.querySelectorAll('.sidebar li[data-section]');
+      panels.forEach(function (p) { p.classList.remove('active'); });
+      items.forEach(function (li) { li.classList.remove('active'); });
+      var panelEl = document.getElementById('panel' + section.charAt(0).toUpperCase() + section.slice(1));
+      var itemEl = document.querySelector('.sidebar li[data-section="' + section + '"]');
+      if (panelEl) panelEl.classList.add('active');
+      if (itemEl) itemEl.classList.add('active');
+      if (section === 'revenue') renderRevenuePanel();
+      if (section === 'settings') renderSettingsPanel();
+    }
+
+    function renderRevenuePanel() {
+      var recovered = (cachedLeads || []).filter(function (l) { return l.status === 'recovered'; });
+      var total = recovered.reduce(function (sum, l) { return sum + (l.revenue || 0); }, 0);
+      var totalFormatted = '$' + (Math.round(total * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      var emptyEl = document.getElementById('revenueEmpty');
+      var contentEl = document.getElementById('revenueContent');
+      var summaryEl = document.getElementById('revenueTotalSummary');
+      var countEl = document.getElementById('revenueLeadCount');
+      var chartEl = document.getElementById('revenueChart');
+      var tbody = document.getElementById('revenueTableBody');
+
+      if (recovered.length === 0) {
+        if (emptyEl) emptyEl.style.display = 'block';
+        if (contentEl) contentEl.style.display = 'none';
+        return;
+      }
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (contentEl) contentEl.style.display = 'flex';
+
+      if (summaryEl) summaryEl.textContent = totalFormatted;
+      if (countEl) countEl.textContent = recovered.length + (recovered.length === 1 ? ' lead' : ' leads');
+
+      var chartWrap = document.getElementById('revenueChart');
+      var svgEl = document.getElementById('revenueLineSvg');
+      var yAxisEl = document.getElementById('revenueChartYAxis');
+      var xAxisEl = document.getElementById('revenueChartXAxis');
+      if (chartWrap && svgEl) {
+        var cumulative = [0];
+        recovered.forEach(function (l) {
+          cumulative.push(cumulative[cumulative.length - 1] + (Number(l.revenue) || 0));
+        });
+        var totalVal = cumulative[cumulative.length - 1] || 0;
+        var n = recovered.length;
+        var pad = { left: 56, right: 24, top: 24, bottom: 40 };
+        var chartW = 400 - pad.left - pad.right;
+        var chartH = 220 - pad.top - pad.bottom;
+        var chartBottom = 220 - pad.bottom;
+        var chartTop = pad.top;
+
+        function x(i) {
+          return n <= 0 ? pad.left : pad.left + (chartW * i / n);
+        }
+        function y(v) {
+          return totalVal <= 0 ? chartBottom : chartBottom - (chartH * v / totalVal);
+        }
+
+        var pathPoints = [];
+        var areaPoints = [];
+        for (var i = 0; i < cumulative.length; i++) {
+          var px = x(i);
+          var py = y(cumulative[i]);
+          pathPoints.push(px + ',' + py);
+          areaPoints.push(px + ',' + py);
+        }
+        var linePath = 'M' + pathPoints.join(' L');
+        var areaPath = 'M' + pad.left + ',' + chartBottom + ' L' + pathPoints.join(' L') + ' L' + pad.left + ',' + chartBottom + ' Z';
+
+        var circlesHtml = '';
+        for (var j = 0; j < cumulative.length; j++) {
+          var cx = x(j);
+          var cy = y(cumulative[j]);
+          var title = j === 0 ? 'Start' : (recovered[j - 1].name || recovered[j - 1].email || 'Lead ' + j) + ': $' + (Math.round(cumulative[j] * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+          circlesHtml += '<circle class="revenue-dot" cx="' + cx + '" cy="' + cy + '" r="4" data-index="' + j + '"><title>' + escapeHtml(title) + '</title></circle>';
+        }
+        svgEl.innerHTML =
+          '<defs><linearGradient id="revenueGradient" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#059669"/><stop offset="100%" stop-color="#10b981" stop-opacity="0.5"/></linearGradient></defs>' +
+          '<path class="revenue-area" d="' + areaPath + '"/>' +
+          '<path class="revenue-line" d="' + linePath + '"/>' +
+          circlesHtml;
+
+        if (yAxisEl) {
+          var yLabels = ['$0'];
+          if (totalVal > 0) {
+            yLabels.push('$' + (Math.round(totalVal * 0.5 * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }));
+            yLabels.push(totalFormatted);
+          }
+          yAxisEl.innerHTML = yLabels.map(function (l) { return '<span>' + l + '</span>'; }).join('');
+        }
+        if (xAxisEl) {
+          var xLabels = recovered.map(function (l, idx) {
+            var name = l.name || l.email || ('Lead ' + (idx + 1));
+            return name.length > 12 ? name.slice(0, 10) + '…' : name;
+          });
+          xAxisEl.innerHTML = xLabels.length ? xLabels.map(function (l) { return '<span title="' + escapeHtml(l) + '">' + escapeHtml(l) + '</span>'; }).join('') : '<span>—</span>';
+        }
+      }
+
+      if (tbody) {
+        tbody.innerHTML = '';
+        recovered.forEach(function (lead) {
+          var tr = document.createElement('tr');
+          var rev = lead.revenue != null ? (Math.round(Number(lead.revenue) * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '0';
+          tr.innerHTML =
+            '<td>' + escapeHtml(lead.name) + '</td>' +
+            '<td>' + escapeHtml(lead.email) + '</td>' +
+            '<td><strong>$' + rev + '</strong></td>';
+          tbody.appendChild(tr);
+        });
+      }
+    }
+
+    function renderSettingsPanel() {
+      var nameEl = document.getElementById('settingsClientName');
+      var slugEl = document.getElementById('settingsClientSlug');
+      if (currentClient) {
+        if (nameEl) nameEl.textContent = currentClient.name || currentClient.slug || '—';
+        if (slugEl) {
+          slugEl.innerHTML = '<code>' + escapeHtml(currentClient.slug || '—') + '</code>';
+        }
+      } else {
+        if (nameEl) nameEl.textContent = '—';
+        if (slugEl) slugEl.innerHTML = '<code>—</code>';
+      }
+    }
+
+    document.querySelectorAll('.sidebar li[data-section]').forEach(function (li) {
+      li.addEventListener('click', function () {
+        showPanel(li.getAttribute('data-section'));
+      });
+    });
+
+    document.addEventListener('DOMContentLoaded', initDashboard);
+
+    document.getElementById('logoutBtn').addEventListener('click', function (e) {
+      e.preventDefault();
+      clearAuth();
+    });
+
+    if (addLeadBtn) addLeadBtn.addEventListener('click', function () {
+      if (modal) modal.style.display = 'block';
+    });
+
+    if (closeBtn) closeBtn.addEventListener('click', function () {
+      if (modal) modal.style.display = 'none';
+      if (form) form.reset();
+    });
+
+    if (cancelBtn) cancelBtn.addEventListener('click', function () {
+      if (modal) modal.style.display = 'none';
+      if (form) form.reset();
+    });
+
+    window.addEventListener('click', function (event) {
+      if (modal && event.target === modal) {
+        modal.style.display = 'none';
+        if (form) form.reset();
+      }
+    });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = document.getElementById('leadName').value.trim();
+      var email = document.getElementById('leadEmail').value.trim();
+      if (!name || !email) {
+        alert('Please fill in all required fields');
+        return;
+      }
+      var submitBtn = form.querySelector('.btn-submit');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Adding...';
+
+      fetch(API + '/me/lead', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ name: name, email: email, phone: '' })
+      })
+        .then(function (res) {
+          if (res.status === 401) {
+            clearAuth();
+            return null;
+          }
+          if (!res.ok) throw new Error('Server error');
+          return res.json();
+        })
+        .then(function (data) {
+          if (!data) return;
+          form.reset();
+          modal.style.display = 'none';
+          loadLeads();
+          alert('Lead added successfully!');
+        })
+        .catch(function (err) {
+          console.error('Error:', err);
+          alert('Failed to add lead. Make sure the backend is running on port 8000.');
+        })
+        .finally(function () {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Add Lead';
+        });
+    });
+
+    var copyWebhookBtn = document.getElementById('copyWebhookBtn');
+    if (copyWebhookBtn) {
+      copyWebhookBtn.addEventListener('click', function () {
+        var el = document.getElementById('webhookUrl');
+        if (!el || !el.textContent) return;
+        navigator.clipboard.writeText(el.textContent).then(function () {
+          copyWebhookBtn.textContent = 'Copied!';
+          setTimeout(function () { copyWebhookBtn.textContent = 'Copy'; }, 1500);
+        }).catch(function () { alert('Could not copy'); });
+      });
+    }
+
+    var copyScriptBtn = document.getElementById('copyScriptBtn');
+    if (copyScriptBtn) {
+      copyScriptBtn.addEventListener('click', function () {
+        var el = document.getElementById('appsScriptBlock');
+        if (!el || !el.textContent) return;
+        navigator.clipboard.writeText(el.textContent).then(function () {
+          copyScriptBtn.textContent = 'Copied!';
+          setTimeout(function () { copyScriptBtn.textContent = 'Copy script'; }, 1500);
+        }).catch(function () { alert('Could not copy'); });
+      });
+    }
+
+    var testFollowupBtn = document.getElementById('testFollowupBtn');
+    if (testFollowupBtn) {
+      testFollowupBtn.addEventListener('click', function () {
+        testFollowupBtn.disabled = true;
+        var origText = testFollowupBtn.textContent;
+        testFollowupBtn.textContent = 'Sending…';
+        fetch(API + '/me/test-followup', {
+          method: 'POST',
+          headers: authHeaders()
+        })
+          .then(function (res) {
+            if (res.status === 401) { clearAuth(); return null; }
+            return res.json()
+              .then(function (data) { return { ok: res.ok, status: res.status, data: data }; })
+              .catch(function () { return { ok: false, status: res.status, data: { detail: 'Server error' } }; });
+          })
+          .then(function (r) {
+            if (!r) return;
+            if (r.ok && r.data && r.data.success) {
+              loadLeads();
+              alert('Test email and follow-up sent to your signup email. Check your inbox.');
+            } else {
+              var msg = (r.data && r.data.detail) ? r.data.detail : 'Failed to send test. Check RESEND_API_KEY and backend logs.';
+              alert(msg);
+            }
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert('Could not reach backend. Is it running on port 8000?');
+          })
+          .finally(function () {
+            testFollowupBtn.disabled = false;
+            testFollowupBtn.textContent = origText;
+          });
+      });
+    }
+
+    var markRecoveredModalEl = document.getElementById('markRecoveredModal');
+    var markRecoveredFormEl = document.getElementById('markRecoveredForm');
+    var markRecoveredCancelEl = document.getElementById('markRecoveredCancel');
+    var markRecoveredCloseEl = markRecoveredModalEl ? markRecoveredModalEl.querySelector('.close') : null;
+
+    function closeMarkRecoveredModal() {
+      if (markRecoveredModalEl) markRecoveredModalEl.style.display = 'none';
+      if (markRecoveredFormEl) markRecoveredFormEl.reset();
+    }
+
+    if (markRecoveredCancelEl) markRecoveredCancelEl.addEventListener('click', closeMarkRecoveredModal);
+    if (markRecoveredCloseEl) markRecoveredCloseEl.addEventListener('click', closeMarkRecoveredModal);
+
+    if (markRecoveredModalEl) {
+      markRecoveredModalEl.addEventListener('click', function (ev) {
+        if (ev.target === markRecoveredModalEl) closeMarkRecoveredModal();
+      });
+    }
+
+    var deleteLeadCancelEl = document.getElementById('deleteLeadCancel');
+    var deleteLeadConfirmEl = document.getElementById('deleteLeadConfirm');
+    var deleteLeadCloseEl = deleteLeadModalEl ? deleteLeadModalEl.querySelector('.close') : null;
+
+    if (deleteLeadCancelEl) deleteLeadCancelEl.addEventListener('click', closeDeleteLeadModal);
+    if (deleteLeadCloseEl) deleteLeadCloseEl.addEventListener('click', closeDeleteLeadModal);
+    if (deleteLeadModalEl) {
+      deleteLeadModalEl.addEventListener('click', function (ev) {
+        if (ev.target === deleteLeadModalEl) closeDeleteLeadModal();
+      });
+    }
+
+    if (deleteLeadConfirmEl) {
+      deleteLeadConfirmEl.addEventListener('click', function () {
+        if (deleteLeadIdPending == null) return;
+        var leadId = deleteLeadIdPending;
+        deleteLeadConfirmEl.disabled = true;
+        fetch(API + '/me/lead/' + leadId, { method: 'DELETE', headers: authHeaders() })
+          .then(function (res) {
+            if (res.status === 401) { clearAuth(); return null; }
+            if (!res.ok) throw new Error('Server error');
+            return res.json().catch(function () { return {}; });
+          })
+          .then(function () {
+            if (leadId !== deleteLeadIdPending) return;
+            closeDeleteLeadModal();
+            loadLeads();
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert('Failed to delete lead.');
+          })
+          .finally(function () { deleteLeadConfirmEl.disabled = false; });
+      });
+    }
+
+    if (markRecoveredFormEl) {
+      markRecoveredFormEl.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var leadId = document.getElementById('markRecoveredLeadId').value;
+        var revenue = parseFloat(document.getElementById('revenueAmount').value, 10) || 0;
+        if (!leadId) return;
+        var submitBtn = markRecoveredFormEl.querySelector('.btn-submit');
+        submitBtn.disabled = true;
+        fetch(API + '/me/lead/' + leadId, {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ status: 'recovered', revenue: revenue })
+        })
+          .then(function (res) {
+            if (res.status === 401) { clearAuth(); return null; }
+            if (!res.ok) throw new Error('Server error');
+            return res.json();
+          })
+          .then(function () {
+            closeMarkRecoveredModal();
+            loadLeads();
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert('Failed to update lead.');
+          })
+          .finally(function () { submitBtn.disabled = false; });
+      });
+    }
+  </script>
+</body>
+</html>

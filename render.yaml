@@ -1,0 +1,27 @@
+# Render Blueprint - Lead Dashboard
+# Deploy: Push to GitHub, then connect repo at https://dashboard.render.com
+# Or use: New → Blueprint → Connect repository
+
+services:
+  - type: web
+    name: lead-dashboard
+    runtime: python
+    plan: free
+
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn main2:app --host 0.0.0.0 --port $PORT
+
+    healthCheckPath: /
+
+    # Required env vars - set these in Render Dashboard after creation
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
+      - key: SENDER_EMAIL
+        value: onboarding@resend.dev
+      - key: SENDER_NAME
+        value: Lead Dashboard
+      - key: CORS_ORIGINS
+        value: "*"
