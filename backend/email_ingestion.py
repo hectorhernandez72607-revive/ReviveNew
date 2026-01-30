@@ -154,7 +154,7 @@ def fetch_unread_emails(
                     "phone": phone,
                     "message_id": message_id,
                     "subject": subj[:500],
-                    "body_snippet": (body or "")[:700].strip(),
+                    "body_snippet": (body or "")[:2000].strip(),
                 })
             except Exception as e:
                 print(f"[email_ingestion] Skip message {uid}: {e}")

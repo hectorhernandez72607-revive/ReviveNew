@@ -48,6 +48,11 @@ EXCLUDE_TERMS = (
     "facebook", "twitter", "instagram", "social media",
     "invoice", "payment received", "payment due", "subscription",
     "your account", "account update", "terms of service", "privacy policy",
+    # Subscription / newsletter footers (often past first 700 chars)
+    "manage preferences", "manage subscription", "email preferences",
+    "you're receiving this because", "you are receiving this because",
+    "update your preferences", "unsubscribe from", "preferences center",
+    "remove from list", "sent to you because", "update subscription",
     # Meeting / calendar / forwards / non-sales
     "reminder", "meeting invite", "meeting invitation", "calendar invite",
     "invited you to", "you're invited", "event invite", "rsvp",
