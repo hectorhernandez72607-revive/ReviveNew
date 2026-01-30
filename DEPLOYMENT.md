@@ -22,7 +22,7 @@ git init
 git add .
 git commit -m "Initial commit - lead dashboard"
 git branch -M master
-git remote add origin https://github.com/hectorhernandez72607/revive.git
+git remote add origin https://github.com/hectorhernandez72607/ReviveNew.git
 git push -u origin master
 ```
 
@@ -62,6 +62,7 @@ In Render: **Dashboard → your service → Environment**:
 |----------|----------|-------|
 | `RESEND_API_KEY` | Yes (for email) | From Resend |
 | `JWT_SECRET` | Yes | Use `openssl rand -hex 32` |
+| `DATABASE_PATH` | No | For persistent DB: set to `/data/leads.db` when using a Render disk (see "Fix: Login fails after redeploy" below) |
 | `SENDER_EMAIL` | No | Default: `onboarding@resend.dev` |
 | `SENDER_NAME` | No | Your business name |
 | `CORS_ORIGINS` | No | Comma-separated frontend URLs; `*` = allow all |
@@ -102,6 +103,16 @@ Use this URL as `BACKEND_BASE` in:
 - The app uses SQLite stored on the server filesystem.
 - On Render’s free tier, the filesystem is ephemeral: data can be lost on redeploys or restarts.
 - For production, consider a persistent database (e.g. Render Postgres) and migrating the app to use it.
+
+### Fix: Login fails after redeploy
+
+If login works right after signup but fails after a Render redeploy (exact email and password no longer work), the database was recreated empty. Fix it by using a **persistent disk** so the DB survives redeploys. This requires a **paid Render plan** (disks are not on the free tier).
+
+1. **Add a persistent disk:** Render Dashboard → your Web Service → **Disks** → Add disk. Set mount path to `/data` and size (e.g. 1 GB). Save; Render will redeploy.
+2. **Set the database path:** Same service → **Environment** → Add **Key:** `DATABASE_PATH`, **Value:** `/data/leads.db`. Save (triggers another redeploy).
+3. **Sign up again once:** After the deploy finishes, open your app and sign up again with your email and password. The previous account lived on the old ephemeral DB; the new one will persist on the disk. From then on, login will work across redeploys.
+
+The app already reads `DATABASE_PATH` from the environment; no code change is required. In Render logs you should see `Database: /data/leads.db` at startup when the env is set.
 
 ### Cold starts (free tier)
 

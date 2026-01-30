@@ -342,10 +342,12 @@ def send_followup_email(
     subject: str | None = None,
     body_plain: str | None = None,
     body_html: str | None = None,
+    signature_block: str | None = None,
 ) -> dict:
     """
     Send a follow-up email to a lead.
     When subject and body_plain are provided (e.g. from AI), use those; otherwise use template.
+    If signature_block is provided, it is appended at the bottom of the email (contact/signature).
     
     Args:
         to_email: The lead's email address
@@ -356,6 +358,7 @@ def send_followup_email(
         subject: Optional custom subject (AI-generated)
         body_plain: Optional custom plain-text body (AI-generated)
         body_html: Optional custom HTML body; if None and body_plain set, generated from body_plain
+        signature_block: Optional contact/signature block appended at bottom of email
     
     Returns:
         dict with success status and message/error
@@ -381,6 +384,17 @@ def send_followup_email(
             subject = formatted["subject"]
             html = formatted["html"]
             text = formatted["text"]
+        
+        # Append client's signature/contact block at bottom if set
+        if signature_block and signature_block.strip():
+            sig = signature_block.strip()
+            text = text.rstrip() + "\n\n" + sig
+            sig_html = _escape_html(sig).replace("\n", "<br>")
+            sig_p = f"<p style='margin-top:1em;white-space:pre-wrap;font-size:14px;'>{sig_html}</p>"
+            if "</body>" in html:
+                html = html.replace("</body>", sig_p + "</body>")
+            else:
+                html = html + sig_p
         
         result = resend.Emails.send({
             "from": f"{sender_name} <{sender_email}>",

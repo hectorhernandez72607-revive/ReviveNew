@@ -420,12 +420,68 @@ body {
   margin-bottom: 16px;
 }
 
+.connect-form-input {
+  width: 100%;
+  max-width: 360px;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
 .connect-form-row label {
   display: block;
   font-size: 12px;
   font-weight: 500;
   color: var(--shopify-text-secondary);
   margin-bottom: 6px;
+}
+
+/* Gmail App Password card — stands out in Settings */
+.settings-imap-card {
+  border-left: 4px solid var(--shopify-primary, #008060);
+}
+.settings-imap-card h3 {
+  margin-top: 0;
+}
+.connect-form-steps {
+  margin: 12px 0 16px;
+}
+.connect-form-list {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--shopify-text-secondary, #6d7175);
+}
+.connect-form-list li {
+  margin-bottom: 6px;
+}
+.settings-imap-status {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.btn-primary {
+  background: var(--shopify-primary, #008060);
+  color: white;
+}
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.signature-textarea {
+  width: 100%;
+  max-width: 560px;
+  box-sizing: border-box;
+  font-size: 14px;
+  font-family: inherit;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--shopify-border);
+  background: var(--shopify-bg);
+  resize: vertical;
+  min-height: 100px;
 }
 
 .connect-form-input-wrap {

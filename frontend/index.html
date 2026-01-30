@@ -52,7 +52,9 @@
 
       <div class="connect-form-card" id="emailLeadsCard">
         <h3>Email leads</h3>
-        <p class="connect-form-desc">Leads from your inbox (Gmail) are added automatically every 10 minutes. Configure IMAP in <code>backend/.env</code>.</p>
+        <p class="connect-form-desc">Set your Gmail App Password in Settings. Leads from your inbox are added automatically every 10 minutes, or click below to check now.</p>
+        <button type="button" id="checkEmailBtn" class="btn">Check email</button>
+        <span id="checkEmailStatus" class="connect-form-desc" style="margin-left: 0.5rem;"></span>
       </div>
 
       <div class="table-container">
@@ -130,6 +132,33 @@
           <h3>Account</h3>
           <p id="settingsClientName" class="connect-form-desc">—</p>
           <p id="settingsClientSlug" class="connect-form-desc"><code>—</code></p>
+        </div>
+        <div class="panel-card settings-imap-card">
+          <h3>Gmail App Password</h3>
+          <p class="connect-form-desc">Let the dashboard read your Gmail inbox and turn new emails into leads. Use a <strong>Gmail App Password</strong> (not your normal Gmail password). <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener">Google&rsquo;s guide</a>.</p>
+          <div class="connect-form-steps">
+            <p class="connect-form-desc" style="margin-bottom: 8px;"><strong>How to get an App Password:</strong></p>
+            <ol class="connect-form-list">
+              <li>In your Google Account go to <strong>Security</strong> → <strong>2-Step Verification</strong> (turn it on if needed).</li>
+              <li>Under 2-Step Verification, open <strong>App passwords</strong> and create one for &ldquo;Mail&rdquo;.</li>
+              <li>Copy the 16-character password and paste it below.</li>
+            </ol>
+          </div>
+          <div class="connect-form-row">
+            <label for="settingsImapPassword">Paste your Gmail App Password here</label>
+            <input type="password" id="settingsImapPassword" class="connect-form-input" placeholder="e.g. abcd efgh ijkl mnop" autocomplete="off" maxlength="32">
+          </div>
+          <p id="settingsImapStatus" class="connect-form-desc settings-imap-status">—</p>
+          <button type="button" id="settingsImapSaveBtn" class="btn btn-primary">Save</button>
+        </div>
+        <div class="panel-card">
+          <h3>Email signature / contact block</h3>
+          <p class="connect-form-desc">This text is added at the bottom of each follow-up email to leads (e.g. your phone, address, website).</p>
+          <div class="connect-form-row">
+            <label for="settingsSignatureBlock">Contact block</label>
+            <textarea id="settingsSignatureBlock" class="signature-textarea" rows="5" placeholder="e.g.&#10;Jane Smith&#10;(555) 123-4567&#10;jane@example.com"></textarea>
+          </div>
+          <button type="button" id="settingsSignatureSaveBtn" class="btn">Save</button>
         </div>
         <div class="connect-form-card" id="connectFormCard">
           <h3>Connect your Google Form</h3>
@@ -258,6 +287,7 @@
     var dashboardEl = document.getElementById('dashboardWrap');
     var authCheckEl = document.getElementById('authCheck');
     var currentClient = null;
+    var currentUser = null;
     var cachedLeads = [];
 
     function escapeHtml(str) {
@@ -405,6 +435,38 @@
       if (deleteLeadModalEl) deleteLeadModalEl.style.display = 'none';
     }
 
+    var checkEmailBtn = document.getElementById('checkEmailBtn');
+    var checkEmailStatus = document.getElementById('checkEmailStatus');
+    if (checkEmailBtn) {
+      checkEmailBtn.addEventListener('click', function () {
+        checkEmailBtn.disabled = true;
+        if (checkEmailStatus) checkEmailStatus.textContent = 'Checking inbox…';
+        fetch(API + '/me/run-email-ingestion', { method: 'POST', headers: authHeaders() })
+          .then(function (res) {
+            if (res.status === 401) { clearAuth(); return null; }
+            return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+          })
+          .then(function (r) {
+            if (!r) return;
+            if (r.ok && r.data) {
+              var created = r.data.created != null ? r.data.created : 0;
+              if (checkEmailStatus) checkEmailStatus.textContent = created ? 'Added ' + created + ' lead(s).' : 'No new leads.';
+              if (created) loadLeads();
+            } else {
+              var msg = (r.data && r.data.detail) ? r.data.detail : 'Check failed. Set your Gmail App Password in Settings.';
+              if (checkEmailStatus) checkEmailStatus.textContent = msg;
+            }
+          })
+          .catch(function (err) {
+            console.error(err);
+            if (checkEmailStatus) checkEmailStatus.textContent = 'Request failed. Try again.';
+          })
+          .finally(function () {
+            checkEmailBtn.disabled = false;
+          });
+      });
+    }
+
     function loadLeads() {
       fetch(API + '/me/leads', { headers: authHeaders() })
         .then(function (res) {
@@ -455,6 +517,7 @@
           if (r.ok) {
             var me = r.data;
             currentClient = me.client;
+            currentUser = me.user || null;
             authCheckEl.style.display = 'none';
             dashboardEl.style.display = 'flex';
             var client = me.client;
@@ -603,15 +666,22 @@
     function renderSettingsPanel() {
       var nameEl = document.getElementById('settingsClientName');
       var slugEl = document.getElementById('settingsClientSlug');
+      var sigEl = document.getElementById('settingsSignatureBlock');
+      var imapStatusEl = document.getElementById('settingsImapStatus');
+      var imapInputEl = document.getElementById('settingsImapPassword');
       if (currentClient) {
         if (nameEl) nameEl.textContent = currentClient.name || currentClient.slug || '—';
         if (slugEl) {
           slugEl.innerHTML = '<code>' + escapeHtml(currentClient.slug || '—') + '</code>';
         }
+        if (sigEl) sigEl.value = currentClient.signature_block || '';
       } else {
         if (nameEl) nameEl.textContent = '—';
         if (slugEl) slugEl.innerHTML = '<code>—</code>';
+        if (sigEl) sigEl.value = '';
       }
+      if (imapStatusEl) imapStatusEl.textContent = (currentUser && currentUser.imap_configured) ? 'Gmail App Password is set.' : 'Not set. Add a Gmail App Password to enable email lead ingestion.';
+      if (imapInputEl) imapInputEl.value = '';
     }
 
     document.querySelectorAll('.sidebar li[data-section]').forEach(function (li) {
@@ -747,6 +817,77 @@
           .finally(function () {
             testFollowupBtn.disabled = false;
             testFollowupBtn.textContent = origText;
+          });
+      });
+    }
+
+    var settingsImapSaveBtn = document.getElementById('settingsImapSaveBtn');
+    var settingsImapPassword = document.getElementById('settingsImapPassword');
+    var settingsImapStatus = document.getElementById('settingsImapStatus');
+    if (settingsImapSaveBtn && settingsImapPassword) {
+      settingsImapSaveBtn.addEventListener('click', function () {
+        var value = settingsImapPassword.value.replace(/\s/g, '').trim();
+        settingsImapSaveBtn.disabled = true;
+        settingsImapSaveBtn.textContent = 'Saving…';
+        fetch(API + '/me/imap-settings', {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ imap_app_password: value || null })
+        })
+          .then(function (res) {
+            if (res.status === 401) { clearAuth(); return null; }
+            if (!res.ok) throw new Error('Server error');
+            return res.json();
+          })
+          .then(function (data) {
+            if (!data) return;
+            if (currentUser) currentUser.imap_configured = data.imap_configured;
+            if (settingsImapStatus) settingsImapStatus.textContent = data.imap_configured ? 'Gmail App Password is set.' : 'Not set. Add a Gmail App Password to enable email lead ingestion.';
+            settingsImapPassword.value = '';
+            settingsImapSaveBtn.textContent = 'Saved';
+            setTimeout(function () { settingsImapSaveBtn.textContent = 'Save'; }, 2000);
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert('Failed to save. Try again.');
+          })
+          .finally(function () {
+            settingsImapSaveBtn.disabled = false;
+            if (settingsImapSaveBtn.textContent === 'Saving…') settingsImapSaveBtn.textContent = 'Save';
+          });
+      });
+    }
+
+    var settingsSignatureSaveBtn = document.getElementById('settingsSignatureSaveBtn');
+    var settingsSignatureBlock = document.getElementById('settingsSignatureBlock');
+    if (settingsSignatureSaveBtn && settingsSignatureBlock) {
+      settingsSignatureSaveBtn.addEventListener('click', function () {
+        var value = settingsSignatureBlock.value.trim();
+        settingsSignatureSaveBtn.disabled = true;
+        settingsSignatureSaveBtn.textContent = 'Saving…';
+        fetch(API + '/me/client', {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ signature_block: value })
+        })
+          .then(function (res) {
+            if (res.status === 401) { clearAuth(); return null; }
+            if (!res.ok) throw new Error(res.status === 400 ? 'Invalid input' : 'Server error');
+            return res.json();
+          })
+          .then(function (client) {
+            if (!client) return;
+            if (currentClient) currentClient.signature_block = client.signature_block != null ? client.signature_block : '';
+            settingsSignatureSaveBtn.textContent = 'Saved';
+            setTimeout(function () { settingsSignatureSaveBtn.textContent = 'Save'; }, 2000);
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert('Failed to save. Try again.');
+          })
+          .finally(function () {
+            settingsSignatureSaveBtn.disabled = false;
+            if (settingsSignatureSaveBtn.textContent === 'Saving…') settingsSignatureSaveBtn.textContent = 'Save';
           });
       });
     }

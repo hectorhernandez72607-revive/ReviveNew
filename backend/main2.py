@@ -24,7 +24,7 @@ from email_ingestion import fetch_unread_emails, mark_as_read
 from lead_classifier import classify_leads
 from message_service import send_followup_sms
 
-DB_PATH = "leads.db"
+DB_PATH = os.getenv("DATABASE_PATH", "leads.db")
 DEFAULT_CLIENT_SLUG = "demo"
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
 JWT_ALGORITHM = "HS256"
@@ -109,6 +109,14 @@ def init_db():
         """)
         try:
             c.execute("ALTER TABLE clients ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE clients ADD COLUMN signature_block TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE users ADD COLUMN imap_app_password TEXT")
         except sqlite3.OperationalError:
             pass
         c.execute("""
@@ -215,43 +223,92 @@ def _row_to_lead(row: tuple) -> dict:
 
 
 def _fetch_clients(cursor) -> list[dict]:
-    cursor.execute("SELECT id, slug, name, created_at FROM clients ORDER BY name")
+    cursor.execute("SELECT id, slug, name, created_at, signature_block FROM clients ORDER BY name")
     return [
-        {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3]}
+        {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3], "signature_block": r[4] if len(r) > 4 else None}
         for r in cursor.fetchall()
     ]
 
 
 def _get_client_by_slug(cursor, slug: str) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at FROM clients WHERE slug = ?", (slug,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block FROM clients WHERE slug = ?", (slug,))
     r = cursor.fetchone()
     if not r:
         return None
-    return {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3]}
+    return {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3], "signature_block": r[4] if len(r) > 4 else None}
+
+
+def _get_client_by_id(cursor, client_id: int) -> dict | None:
+    cursor.execute("SELECT id, slug, name, created_at, signature_block FROM clients WHERE id = ?", (client_id,))
+    r = cursor.fetchone()
+    if not r:
+        return None
+    return {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3], "signature_block": r[4] if len(r) > 4 else None}
 
 
 def _get_user_by_id(cursor, user_id: int) -> dict | None:
-    cursor.execute("SELECT id, email, password_hash, created_at FROM users WHERE id = ?", (user_id,))
+    cursor.execute(
+        "SELECT id, email, password_hash, created_at, imap_app_password FROM users WHERE id = ?",
+        (user_id,),
+    )
     r = cursor.fetchone()
     if not r:
         return None
-    return {"id": r[0], "email": r[1], "password_hash": r[2], "created_at": r[3]}
+    return {
+        "id": r[0],
+        "email": r[1],
+        "password_hash": r[2],
+        "created_at": r[3],
+        "imap_app_password": r[4] if len(r) > 4 else None,
+    }
 
 
 def _get_user_by_email(cursor, email: str) -> dict | None:
-    cursor.execute("SELECT id, email, password_hash, created_at FROM users WHERE email = ?", (email.lower().strip(),))
+    cursor.execute(
+        "SELECT id, email, password_hash, created_at, imap_app_password FROM users WHERE email = ?",
+        (email.lower().strip(),),
+    )
     r = cursor.fetchone()
     if not r:
         return None
-    return {"id": r[0], "email": r[1], "password_hash": r[2], "created_at": r[3]}
+    return {
+        "id": r[0],
+        "email": r[1],
+        "password_hash": r[2],
+        "created_at": r[3],
+        "imap_app_password": r[4] if len(r) > 4 else None,
+    }
+
+
+def _get_users_with_imap(cursor) -> list[dict]:
+    """Users who have imap_app_password set, with their client id and slug for ingestion."""
+    cursor.execute(
+        """
+        SELECT u.id, u.email, u.imap_app_password, c.id AS client_id, c.slug AS client_slug
+        FROM users u
+        JOIN clients c ON c.user_id = u.id
+        WHERE u.imap_app_password IS NOT NULL AND TRIM(u.imap_app_password) != ''
+        """
+    )
+    rows = cursor.fetchall()
+    return [
+        {
+            "id": r[0],
+            "email": r[1],
+            "imap_app_password": r[2],
+            "client_id": r[3],
+            "client_slug": r[4],
+        }
+        for r in rows
+    ]
 
 
 def _get_client_by_user_id(cursor, user_id: int) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at FROM clients WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block FROM clients WHERE user_id = ?", (user_id,))
     r = cursor.fetchone()
     if not r:
         return None
-    return {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3]}
+    return {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3], "signature_block": r[4] if len(r) > 4 else None}
 
 
 def _get_user_by_client_id(cursor, client_id: int) -> dict | None:
@@ -369,7 +426,7 @@ def is_older_than_7_days_since(last_contacted: str | None) -> bool:
     return t <= datetime.datetime.now() - datetime.timedelta(days=7)
 
 
-def followup(lead: dict, conn: sqlite3.Connection, from_email: str | None = None, from_name: str | None = None) -> bool:
+def followup(lead: dict, conn: sqlite3.Connection, from_email: str | None = None, from_name: str | None = None, signature_block: str = "") -> bool:
     """
     Send the first (and only scheduled) follow-up: 24h after lead creation if the client
     hasn't already contacted. Sends via SMS for source=Messages (when phone present),
@@ -426,6 +483,7 @@ def followup(lead: dict, conn: sqlite3.Connection, from_email: str | None = None
                 from_name=from_name,
                 subject=ai_copy["subject"],
                 body_plain=ai_copy["body"],
+                signature_block=signature_block or None,
             )
         else:
             result = send_followup_email(
@@ -434,6 +492,7 @@ def followup(lead: dict, conn: sqlite3.Connection, from_email: str | None = None
                 followup_number=lead["followups_sent"],
                 from_email=from_email,
                 from_name=from_name,
+                signature_block=signature_block or None,
             )
 
     if result["success"]:
@@ -463,6 +522,7 @@ def weekly_followup(
     conn: sqlite3.Connection,
     from_email: str | None = None,
     from_name: str | None = None,
+    signature_block: str = "",
 ) -> bool:
     """
     Send a weekly check-in when it's been 7+ days since last_contacted.
@@ -500,6 +560,7 @@ def weekly_followup(
                 from_name=from_name,
                 subject=ai_copy["subject"],
                 body_plain=ai_copy["body"],
+                signature_block=signature_block or None,
             )
         else:
             result = send_followup_email(
@@ -508,6 +569,7 @@ def weekly_followup(
                 followup_number=2,
                 from_email=from_email,
                 from_name=from_name,
+                signature_block=signature_block or None,
             )
     if result["success"]:
         lead["last_contacted"] = datetime.datetime.now().isoformat()
@@ -524,10 +586,9 @@ def _run_followups_for_client(client_id: int, client_slug: str):
     with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
         c = conn.cursor()
         leads = _fetch_leads_by_client(c, client_id)
-        # Get the client and user (owner) for this client to use their email as sender
-        c.execute("SELECT name FROM clients WHERE id = ?", (client_id,))
-        client_row = c.fetchone()
-        client_name = client_row[0] if client_row else None
+        client = _get_client_by_id(c, client_id)
+        client_name = client["name"] if client else None
+        signature_block = (client.get("signature_block") or "").strip() if client else ""
         user = _get_user_by_client_id(c, client_id)
         from_email = user["email"] if user else None
         from_name = client_name or (user["email"].split("@")[0] if user else None)
@@ -548,7 +609,7 @@ def _run_followups_for_client(client_id: int, client_slug: str):
         # One scheduled follow-up at 24h after lead creation (if client hasn't contacted)
         if (lead.get("followups_sent") or 0) == 0:
             with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-                if followup(lead, conn, from_email=from_email, from_name=from_name):
+                if followup(lead, conn, from_email=from_email, from_name=from_name, signature_block=signature_block):
                     continue  # sent; followup() already updated lead
         # Weekly follow-up: 7+ days since last contact (any number of follow-ups already sent)
         if is_older_than_7_days_since(lead.get("last_contacted")):
@@ -556,7 +617,7 @@ def _run_followups_for_client(client_id: int, client_slug: str):
                 c2 = conn.cursor()
                 lead_refresh = _get_lead_by_id_and_client(c2, lead["id"], client_id)
                 if lead_refresh:
-                    if weekly_followup(lead_refresh, conn, from_email=from_email, from_name=from_name):
+                    if weekly_followup(lead_refresh, conn, from_email=from_email, from_name=from_name, signature_block=signature_block):
                         pass  # already updated in weekly_followup
 
 
@@ -569,32 +630,105 @@ def central_loop():
         _run_followups_for_client(client["id"], client["slug"])
 
 
+def _run_ingestion_for_inbox(
+    imap_email: str,
+    imap_password: str,
+    client_slug: str,
+    timeout_s: int,
+    max_messages: int | None = None,
+) -> dict:
+    """Ingest one inbox; returns {ok, error?, created, client_slug}. Never raises."""
+    try:
+        old_timeout = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(timeout_s)
+            with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+                c = conn.cursor()
+                client = _get_client_by_slug(c, client_slug)
+                if not client:
+                    print(f"[email_ingestion] Client '{client_slug}' not found. Skip.")
+                    return {"ok": False, "error": f"Client '{client_slug}' not found", "created": 0}
+
+                emails = fetch_unread_emails(
+                    imap_email, imap_password, timeout=timeout_s,
+                    max_messages=max_messages,
+                )
+                if os.getenv("OPENAI_API_KEY", "").strip():
+                    pred = classify_leads(emails)
+                    emails = [e for e, is_lead in zip(emails, pred) if is_lead]
+                    if pred and not all(pred):
+                        print(f"[email_ingestion] AI classifier filtered to {len(emails)} likely lead(s).")
+                created = 0
+                processed_ids: list[str] = []
+
+                for em in emails:
+                    message_id = (em.get("message_id") or "").strip()
+                    if not message_id:
+                        continue
+                    c.execute("SELECT 1 FROM processed_email_ids WHERE message_id = ?", (message_id,))
+                    if c.fetchone():
+                        continue
+                    name = (em.get("name") or "Unknown").strip()[:200]
+                    email_addr = (em.get("email") or "").strip()
+                    phone = (em.get("phone") or "").strip()[:50]
+                    if not email_addr or "@" not in email_addr:
+                        email_addr = "unknown@email.invalid"
+                    lead = _create_lead(
+                        client["id"],
+                        name,
+                        email_addr,
+                        phone,
+                        "Email",
+                        conn,
+                        c,
+                        inquiry_subject=em.get("subject"),
+                        inquiry_body=em.get("body_snippet"),
+                    )
+                    now = datetime.datetime.now().isoformat()
+                    c.execute(
+                        "INSERT INTO processed_email_ids (message_id, lead_id, client_id, created_at) VALUES (?, ?, ?, ?)",
+                        (message_id, lead["id"], client["id"], now),
+                    )
+                    conn.commit()
+                    created += 1
+                    processed_ids.append(message_id)
+                    print(f"[email_ingestion] Lead from email: {name} ({email_addr})")
+
+                if processed_ids:
+                    try:
+                        mark_as_read(imap_email, imap_password, processed_ids, timeout=timeout_s)
+                    except Exception as e:
+                        print(f"[email_ingestion] Mark-as-read failed: {e}")
+
+                return {"ok": True, "created": created, "client_slug": client_slug}
+        finally:
+            socket.setdefaulttimeout(old_timeout)
+    except (socket.timeout, TimeoutError) as e:
+        err = str(e)
+        print(f"[email_ingestion] Timeout: {err}")
+        return {"ok": False, "error": "IMAP connection timed out. Check network and Gmail access.", "created": 0}
+    except Exception as e:
+        err = str(e)
+        print(f"[email_ingestion] Error: {err}")
+        if "Authentication failed" in err or "LOGIN" in err.upper() or "invalid credentials" in err.lower():
+            err = "IMAP login failed. Use a Gmail App Password (not your normal password)."
+        elif "timed out" in err.lower() or "timeout" in err.lower():
+            err = "IMAP connection timed out. Check network and Gmail access."
+        return {"ok": False, "error": err, "created": 0}
+
+
 def run_email_ingestion(
     request_timeout_s: int | None = None,
     client_slug_override: str | None = None,
+    user_id_override: int | None = None,
 ) -> dict:
     """
-    Ingest leads from configured IMAP inbox (Gmail). Reads unread emails,
-    parses name/email/phone, creates leads for the given client, dedupes by Message-ID.
-    Always returns a dict with ok, error (if any), and created; never raises.
+    Ingest leads from IMAP (Gmail). Uses per-user credentials when available.
 
-    - request_timeout_s: if set (e.g. 20), run IMAP work in a thread and return within
-      that many seconds; used by /me/run-email-ingestion so the Check email button
-      doesn't hang. When None (scheduler), no request timeout.
-    - client_slug_override: when set (e.g. from logged-in user's client), use this
-      instead of IMAP_CLIENT_SLUG for which client receives leads.
+    - request_timeout_s: if set (e.g. 20), run in a thread and return within that time (manual "Check email").
+    - client_slug_override + user_id_override: manual run for one user; uses that user's stored Gmail App Password.
+    - When neither override: scheduler run; loops over all users with imap_app_password set and ingests each inbox.
     """
-    imap_email = (os.getenv("IMAP_EMAIL") or "").strip()
-    imap_password = (os.getenv("IMAP_APP_PASSWORD") or "").strip()
-    client_slug = (
-        (client_slug_override or "").strip()
-        or (os.getenv("IMAP_CLIENT_SLUG") or DEFAULT_CLIENT_SLUG).strip()
-    )
-
-    if not imap_email or not imap_password:
-        print("[email_ingestion] IMAP_EMAIL / IMAP_APP_PASSWORD not set. Skip.")
-        return {"ok": False, "error": "IMAP_EMAIL and IMAP_APP_PASSWORD required", "created": 0}
-
     timeout_s = 15
     try:
         t = os.getenv("IMAP_TIMEOUT", "15").strip()
@@ -603,95 +737,50 @@ def run_email_ingestion(
     except (TypeError, ValueError):
         pass
 
-    def _do() -> dict:
-        try:
-            old_timeout = socket.getdefaulttimeout()
-            try:
-                socket.setdefaulttimeout(timeout_s)
-                with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-                    c = conn.cursor()
-                    client = _get_client_by_slug(c, client_slug)
-                    if not client:
-                        print(f"[email_ingestion] Client '{client_slug}' not found. Skip.")
-                        return {"ok": False, "error": f"Client '{client_slug}' not found", "created": 0}
+    # Manual run: one user's inbox (dashboard "Check email" button)
+    if (client_slug_override or "").strip() and user_id_override is not None:
+        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+            c = conn.cursor()
+            user = _get_user_by_id(c, user_id_override)
+            if not user or not (user.get("imap_app_password") or "").strip():
+                return {"ok": False, "error": "Set your Gmail App Password in Settings to check email.", "created": 0}
+            imap_email = user["email"]
+            imap_password = (user.get("imap_app_password") or "").strip()
+            client_slug = (client_slug_override or "").strip()
 
-                    emails = fetch_unread_emails(
-                        imap_email, imap_password, timeout=timeout_s,
-                        max_messages=20 if request_timeout_s is not None else None,
-                    )
-                    # AI "is this a lead?" filter when OPENAI_API_KEY is set
-                    if os.getenv("OPENAI_API_KEY", "").strip():
-                        pred = classify_leads(emails)
-                        emails = [e for e, is_lead in zip(emails, pred) if is_lead]
-                        if pred and not all(pred):
-                            print(f"[email_ingestion] AI classifier filtered to {len(emails)} likely lead(s).")
-                    created = 0
-                    processed_ids: list[str] = []
+        def _do() -> dict:
+            return _run_ingestion_for_inbox(
+                imap_email, imap_password, client_slug, timeout_s,
+                max_messages=20 if request_timeout_s is not None else None,
+            )
 
-                    for em in emails:
-                        message_id = (em.get("message_id") or "").strip()
-                        if not message_id:
-                            continue
-                        c.execute("SELECT 1 FROM processed_email_ids WHERE message_id = ?", (message_id,))
-                        if c.fetchone():
-                            continue
-                        name = (em.get("name") or "Unknown").strip()[:200]
-                        email_addr = (em.get("email") or "").strip()
-                        phone = (em.get("phone") or "").strip()[:50]
-                        if not email_addr or "@" not in email_addr:
-                            email_addr = "unknown@email.invalid"
-                        lead = _create_lead(
-                            client["id"],
-                            name,
-                            email_addr,
-                            phone,
-                            "Email",
-                            conn,
-                            c,
-                            inquiry_subject=em.get("subject"),
-                            inquiry_body=em.get("body_snippet"),
-                        )
-                        now = datetime.datetime.now().isoformat()
-                        c.execute(
-                            "INSERT INTO processed_email_ids (message_id, lead_id, client_id, created_at) VALUES (?, ?, ?, ?)",
-                            (message_id, lead["id"], client["id"], now),
-                        )
-                        conn.commit()
-                        created += 1
-                        processed_ids.append(message_id)
-                        print(f"[email_ingestion] Lead from email: {name} ({email_addr})")
+        if request_timeout_s is not None and request_timeout_s > 0:
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                fut = ex.submit(_do)
+                try:
+                    return fut.result(timeout=request_timeout_s)
+                except FuturesTimeoutError:
+                    print("[email_ingestion] Request timed out (thread).")
+                    return {"ok": False, "error": "IMAP request timed out. Check network and Gmail (App Password, IMAP enabled).", "created": 0}
+        return _do()
 
-                    if processed_ids:
-                        try:
-                            mark_as_read(imap_email, imap_password, processed_ids, timeout=timeout_s)
-                        except Exception as e:
-                            print(f"[email_ingestion] Mark-as-read failed: {e}")
+    # Scheduler run: all users who have IMAP configured
+    with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+        c = conn.cursor()
+        users = _get_users_with_imap(c)
+    if not users:
+        print("[email_ingestion] No users with Gmail App Password set. Skip.")
+        return {"ok": True, "created": 0}
 
-                    return {"ok": True, "created": created, "client_slug": client_slug}
-            finally:
-                socket.setdefaulttimeout(old_timeout)
-        except (socket.timeout, TimeoutError) as e:
-            err = str(e)
-            print(f"[email_ingestion] Timeout: {err}")
-            return {"ok": False, "error": "IMAP connection timed out. Check network and Gmail access, or set IMAP_TIMEOUT in .env.", "created": 0}
-        except Exception as e:
-            err = str(e)
-            print(f"[email_ingestion] Error: {err}")
-            if "Authentication failed" in err or "LOGIN" in err.upper() or "invalid credentials" in err.lower():
-                err = "IMAP login failed. Check IMAP_EMAIL and IMAP_APP_PASSWORD (use Gmail App Password, not your normal password)."
-            elif "timed out" in err.lower() or "timeout" in err.lower():
-                err = "IMAP connection timed out. Check network and Gmail access, or set IMAP_TIMEOUT in .env."
-            return {"ok": False, "error": err, "created": 0}
-
-    if request_timeout_s is not None and request_timeout_s > 0:
-        with ThreadPoolExecutor(max_workers=1) as ex:
-            fut = ex.submit(_do)
-            try:
-                return fut.result(timeout=request_timeout_s)
-            except FuturesTimeoutError:
-                print("[email_ingestion] Request timed out (thread).")
-                return {"ok": False, "error": "IMAP request timed out. Check network and Gmail (App Password, IMAP enabled).", "created": 0}
-    return _do()
+    total_created = 0
+    for u in users:
+        result = _run_ingestion_for_inbox(
+            u["email"], u["imap_app_password"], u["client_slug"], timeout_s, max_messages=None
+        )
+        total_created += result.get("created", 0)
+        if not result.get("ok"):
+            print(f"[email_ingestion] Inbox {u['email']}: {result.get('error', 'unknown')}")
+    return {"ok": True, "created": total_created}
 
 
 # --- Pydantic model for POST /lead ---
@@ -712,6 +801,14 @@ class WebhookLeadCreate(BaseModel):
 class ClientCreate(BaseModel):
     slug: str
     name: str
+
+
+class ClientUpdate(BaseModel):
+    signature_block: str | None = None  # Contact/signature block appended to follow-up emails
+
+
+class ImapSettingsUpdate(BaseModel):
+    imap_app_password: str | None = None  # Gmail App Password; empty/null clears it
 
 
 class SignupRequest(BaseModel):
@@ -766,13 +863,19 @@ async def get_current_user(
     client = _get_client_by_user_id(c, user_id)
     if not client:
         raise HTTPException(status_code=403, detail="No client associated with account")
-    return {"user": user, "client": client}
+    safe_user = {
+        "id": user["id"],
+        "email": user["email"],
+        "imap_configured": bool(user.get("imap_app_password")),
+    }
+    return {"user": safe_user, "client": client}
 
 
 # --- Lifespan: init DB, start scheduler ---
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    print(f"Database: {DB_PATH}")
     init_db()
     if JWT_SECRET in WEAK_JWT_SECRETS or len(JWT_SECRET) < 32:
         print("⚠️  SECURITY: Set a strong JWT_SECRET in .env (e.g. openssl rand -hex 32)")
@@ -835,8 +938,8 @@ def signup(body: SignupRequest, db: tuple = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": user["id"], "email": user["email"]},
-        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"]},
+        "user": {"id": user["id"], "email": user["email"], "imap_configured": False},
+        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or ""},
     }
 
 
@@ -857,8 +960,8 @@ def login(body: LoginRequest, db: tuple = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": user["id"], "email": user["email"]},
-        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"]},
+        "user": {"id": user["id"], "email": user["email"], "imap_configured": bool(user.get("imap_app_password"))},
+        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or ""},
     }
 
 
@@ -866,6 +969,40 @@ def login(body: LoginRequest, db: tuple = Depends(get_db)):
 def me(current: dict = Depends(get_current_user)):
     """Current user + their client. Requires Authorization: Bearer <token>."""
     return current
+
+
+@app.patch("/me/client")
+def update_my_client(
+    body: ClientUpdate,
+    current: dict = Depends(get_current_user),
+    db: tuple = Depends(get_db),
+):
+    """Update the authenticated user's client (e.g. signature/contact block for follow-up emails)."""
+    conn, c = db
+    client_id = current["client"]["id"]
+    if body.signature_block is None:
+        return current["client"]
+    # Normalize: store as string, max length to avoid abuse
+    signature_block = (body.signature_block or "").strip()[:2000]
+    c.execute("UPDATE clients SET signature_block = ? WHERE id = ?", (signature_block or None, client_id))
+    conn.commit()
+    updated = _get_client_by_id(c, client_id)
+    return updated or current["client"]
+
+
+@app.patch("/me/imap-settings")
+def update_my_imap_settings(
+    body: ImapSettingsUpdate,
+    current: dict = Depends(get_current_user),
+    db: tuple = Depends(get_db),
+):
+    """Store or clear the authenticated user's Gmail App Password for email lead ingestion."""
+    conn, c = db
+    user_id = current["user"]["id"]
+    value = (body.imap_app_password or "").strip() or None
+    c.execute("UPDATE users SET imap_app_password = ? WHERE id = ?", (value, user_id))
+    conn.commit()
+    return {"imap_configured": bool(value)}
 
 
 @app.get("/me/leads")
@@ -1013,11 +1150,14 @@ def me_test_followup(
 @app.post("/me/run-email-ingestion")
 def me_run_email_ingestion(current: dict = Depends(get_current_user)):
     """
-    Trigger email lead ingestion (IMAP). Uses IMAP_* env for mailbox; leads go to
-    the logged-in user's client. Returns within ~20s or times out. Requires auth.
+    Trigger email lead ingestion (IMAP). Uses the logged-in user's stored Gmail App
+    Password (set in Settings); leads go to their client. Returns within ~20s or times out.
     """
     slug = (current.get("client") or {}).get("slug") or ""
-    out = run_email_ingestion(request_timeout_s=20, client_slug_override=slug)
+    user_id = (current.get("user") or {}).get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    out = run_email_ingestion(request_timeout_s=20, client_slug_override=slug, user_id_override=user_id)
     if not out.get("ok"):
         raise HTTPException(status_code=502, detail=out.get("error", "Email ingestion failed"))
     return out
