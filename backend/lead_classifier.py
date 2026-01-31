@@ -69,7 +69,7 @@ EXCLUDE_SENDER_PATTERNS = (
     "notification", "notifications", "alert", "alerts", "mailer-daemon",
     "postmaster", "bounce", "bounces", "auto@", "automated@", "system@",
     "newsletter", "news@", "marketing@", "promo@", "digest@", "mailer@",
-    "calendar", "reminders", "invite", "event",
+    "calendar", "reminders", "invite",
 )
 
 
