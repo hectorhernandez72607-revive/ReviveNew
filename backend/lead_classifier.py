@@ -58,8 +58,7 @@ EXCLUDE_TERMS = (
     "invited you to", "you're invited", "event invite", "rsvp",
     "forwarded", "fwd:", "fwd :",
     "thread", "conversation", "internal", "cc:", "bcc:",
-    "survey", "feedback request", "please take our survey", "quick question",
-    "hi there", "just checking in", "following up on", "touch base",
+    "survey", "feedback request", "please take our survey",
     "scheduled for", "reschedule", "meeting scheduled", "zoom", "teams meeting",
     "google calendar", "outlook calendar", "add to calendar", "add to your calendar",
 )

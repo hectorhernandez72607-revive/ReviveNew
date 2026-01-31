@@ -439,12 +439,28 @@
     var checkEmailStatus = document.getElementById('checkEmailStatus');
     if (checkEmailBtn) {
       checkEmailBtn.addEventListener('click', function () {
+        if (!getToken()) {
+          if (checkEmailStatus) checkEmailStatus.textContent = 'Please log in again.';
+          return;
+        }
         checkEmailBtn.disabled = true;
         if (checkEmailStatus) checkEmailStatus.textContent = 'Checking inbox…';
-        fetch(API + '/me/run-email-ingestion', { method: 'POST', headers: authHeaders() })
+        fetch(API + '/me/run-email-ingestion', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: '{}'
+        })
           .then(function (res) {
-            if (res.status === 401) { clearAuth(); return null; }
-            return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+            if (res.status === 401) {
+              if (checkEmailStatus) checkEmailStatus.textContent = 'Session expired. Please log in again.';
+              clearAuth();
+              return null;
+            }
+            return res.json()
+              .then(function (data) { return { ok: res.ok, status: res.status, data: data }; })
+              .catch(function () {
+                return { ok: false, status: res.status, data: { detail: 'Server error (status ' + res.status + '). Set your Gmail App Password in Settings.' } };
+              });
           })
           .then(function (r) {
             if (!r) return;
@@ -459,7 +475,7 @@
           })
           .catch(function (err) {
             console.error(err);
-            if (checkEmailStatus) checkEmailStatus.textContent = 'Request failed. Try again.';
+            if (checkEmailStatus) checkEmailStatus.textContent = 'Network error or timeout. Check connection and try again.';
           })
           .finally(function () {
             checkEmailBtn.disabled = false;
