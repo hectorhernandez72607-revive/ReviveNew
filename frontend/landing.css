@@ -13,6 +13,7 @@
   .site-header {
     background: rgba(15, 23, 42, 0.95);
     padding: 16px 10%;
+    text-align: left;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
   
@@ -100,27 +101,37 @@
   .hero {
     background: linear-gradient(160deg, #0f172a 0%, #1e293b 50%, #111827 100%);
     color: white;
+    padding: 120px 10% 140px;
+  }
+  
+  .hero-label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0 auto 20px;
   }
   
   .hero h1 {
-    font-size: clamp(32px, 5vw, 48px);
+    font-size: clamp(36px, 5.5vw, 56px);
     font-weight: 700;
-    line-height: 1.2;
-    max-width: 720px;
-    margin: 0 auto;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    max-width: 680px;
+    margin: 0 auto 28px;
   }
   
   .hero-sub {
-    margin: 20px auto 12px;
+    margin: 0 auto 40px;
     font-size: 18px;
-    opacity: 0.95;
-    max-width: 560px;
+    opacity: 0.88;
+    max-width: 420px;
+    line-height: 1.5;
   }
   
-  .hero-stat {
-    font-size: 15px;
-    opacity: 0.75;
-    margin-bottom: 8px;
+  .cta-hero {
+    margin-top: 0;
   }
   
   .cta {
@@ -260,18 +271,50 @@
     background: #eef2ff;
   }
   
+  .pricing-intro {
+    max-width: 560px;
+    margin: 12px auto 0;
+    font-size: 17px;
+    color: #475569;
+    line-height: 1.5;
+  }
+  
   .pricing-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 32px;
-    max-width: 860px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    max-width: 1100px;
     margin: 40px auto 0;
   }
   
-  @media (max-width: 768px) {
+  .pricing-grid.pricing-single {
+    grid-template-columns: 1fr;
+    max-width: 440px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .pricing-grid.pricing-two {
+    grid-template-columns: 1fr 1fr;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+    gap: 28px;
+  }
+  
+  @media (max-width: 900px) {
     .pricing-grid {
       grid-template-columns: 1fr;
       max-width: 400px;
+    }
+  
+    .pricing-grid.pricing-single {
+      max-width: 100%;
+    }
+  
+    .pricing-grid.pricing-two {
+      grid-template-columns: 1fr;
+      max-width: 100%;
     }
   }
   
@@ -286,21 +329,25 @@
     border: 1px solid rgba(99, 102, 241, 0.2);
   }
   
-  .price-box-alt {
+  .price-box-featured {
+    box-shadow: 0 12px 32px rgba(99, 102, 241, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.25);
+  }
+  
+  .price-box-owner {
     border: 1px solid #e2e8f0;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   }
   
-  .price-box-alt h3 {
-    margin-top: 0;
+  .price-badge-owner {
+    background: #64748b;
   }
   
-  .cta-secondary {
-    background: #475569;
-  }
-  
-  .cta-secondary:hover {
+  .cta-owner {
     background: #334155;
+  }
+  
+  .cta-owner:hover {
+    background: #1e293b;
   }
   
   .price-badge {

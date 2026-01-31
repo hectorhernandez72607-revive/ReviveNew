@@ -8,6 +8,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="landing.css">
+  <!-- App base URL when landing is on Netlify and app is on Render. Change if your Render URL changes. -->
+  <script>
+    window.REVIVE_APP_BASE = 'https://lead-dashboard-hnyj.onrender.com';
+  </script>
 </head>
 <body>
 
@@ -20,9 +24,9 @@
         </svg>
       </div>
       <nav class="header-nav">
-        <a href="index.html">Dashboard</a>
-        <a href="signup.html">Sign up</a>
-        <a href="login.html">Log in</a>
+        <a href="https://lead-dashboard-hnyj.onrender.com/index.html" class="app-link" data-path="index.html">Dashboard</a>
+        <a href="https://lead-dashboard-hnyj.onrender.com/signup.html" class="app-link" data-path="signup.html">Sign up</a>
+        <a href="https://lead-dashboard-hnyj.onrender.com/login.html" class="app-link" data-path="login.html">Log in</a>
       </nav>
     </div>
   </header>
@@ -109,9 +113,9 @@
   <!-- FOOTER -->
   <footer>
     <div class="footer-links">
-      <a href="index.html">Dashboard</a>
-      <a href="signup.html">Sign up</a>
-      <a href="login.html">Log in</a>
+      <a href="https://lead-dashboard-hnyj.onrender.com/index.html" class="app-link" data-path="index.html">Dashboard</a>
+      <a href="https://lead-dashboard-hnyj.onrender.com/signup.html" class="app-link" data-path="signup.html">Sign up</a>
+      <a href="https://lead-dashboard-hnyj.onrender.com/login.html" class="app-link" data-path="login.html">Log in</a>
       <a href="#">Terms</a>
       <a href="#">Privacy</a>
       <a href="#">Contact</a>
@@ -119,6 +123,15 @@
     <p>© 2026 REVIVE. All rights reserved.</p>
   </footer>
 
+  <script>
+    (function setAppLinks() {
+      var base = window.REVIVE_APP_BASE || window.location.origin;
+      document.querySelectorAll('a.app-link[data-path]').forEach(function (a) {
+        var path = a.getAttribute('data-path');
+        if (path) a.href = base.replace(/\/$/, '') + '/' + path;
+      });
+    })();
+  </script>
   <script>
     document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
       anchor.addEventListener('click', function (e) {
