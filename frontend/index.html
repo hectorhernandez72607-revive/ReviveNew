@@ -52,9 +52,7 @@
 
       <div class="connect-form-card" id="emailLeadsCard">
         <h3>Email leads</h3>
-        <p class="connect-form-desc">Set your Gmail App Password in Settings. Leads from your inbox are added automatically every 10 minutes, or click below to check now.</p>
-        <button type="button" id="checkEmailBtn" class="btn">Check email</button>
-        <span id="checkEmailStatus" class="connect-form-desc" style="margin-left: 0.5rem;"></span>
+        <p class="connect-form-desc">Set your Gmail App Password in Settings. Leads from your inbox are added automatically every 2 minutes.</p>
       </div>
 
       <div class="table-container">
@@ -433,54 +431,6 @@
     function closeDeleteLeadModal() {
       deleteLeadIdPending = null;
       if (deleteLeadModalEl) deleteLeadModalEl.style.display = 'none';
-    }
-
-    var checkEmailBtn = document.getElementById('checkEmailBtn');
-    var checkEmailStatus = document.getElementById('checkEmailStatus');
-    if (checkEmailBtn) {
-      checkEmailBtn.addEventListener('click', function () {
-        if (!getToken()) {
-          if (checkEmailStatus) checkEmailStatus.textContent = 'Please log in again.';
-          return;
-        }
-        checkEmailBtn.disabled = true;
-        if (checkEmailStatus) checkEmailStatus.textContent = 'Checking inbox…';
-        fetch(API + '/me/run-email-ingestion', {
-          method: 'POST',
-          headers: authHeaders(),
-          body: '{}'
-        })
-          .then(function (res) {
-            if (res.status === 401) {
-              if (checkEmailStatus) checkEmailStatus.textContent = 'Session expired. Please log in again.';
-              clearAuth();
-              return null;
-            }
-            return res.json()
-              .then(function (data) { return { ok: res.ok, status: res.status, data: data }; })
-              .catch(function () {
-                return { ok: false, status: res.status, data: { detail: 'Server error (status ' + res.status + '). Set your Gmail App Password in Settings.' } };
-              });
-          })
-          .then(function (r) {
-            if (!r) return;
-            if (r.ok && r.data) {
-              var created = r.data.created != null ? r.data.created : 0;
-              if (checkEmailStatus) checkEmailStatus.textContent = created ? 'Added ' + created + ' lead(s).' : 'No new leads.';
-              if (created) loadLeads();
-            } else {
-              var msg = (r.data && r.data.detail) ? r.data.detail : 'Check failed. Set your Gmail App Password in Settings.';
-              if (checkEmailStatus) checkEmailStatus.textContent = msg;
-            }
-          })
-          .catch(function (err) {
-            console.error(err);
-            if (checkEmailStatus) checkEmailStatus.textContent = 'Network error or timeout. Check connection and try again.';
-          })
-          .finally(function () {
-            checkEmailBtn.disabled = false;
-          });
-      });
     }
 
     function loadLeads() {

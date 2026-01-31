@@ -883,7 +883,7 @@ async def lifespan(app: FastAPI):
         print("⚠️  TEST ENDPOINTS enabled. Set ENABLE_TEST_ENDPOINTS=false in production.")
     scheduler = BackgroundScheduler()
     scheduler.add_job(central_loop, "interval", hours=1)
-    scheduler.add_job(run_email_ingestion, "interval", minutes=10)
+    scheduler.add_job(run_email_ingestion, "interval", minutes=2)
     scheduler.start()
     yield
     scheduler.shutdown()
