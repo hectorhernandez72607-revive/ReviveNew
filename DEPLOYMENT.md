@@ -114,6 +114,28 @@ If login works right after signup but fails after a Render redeploy (exact email
 
 The app already reads `DATABASE_PATH` from the environment; no code change is required. In Render logs you should see `Database: /data/leads.db` at startup when the env is set.
 
+### Email ingestion not working?
+
+If leads from your inbox never show up, check these in order:
+
+1. **Persistent DB on Render**  
+   Use a disk and `DATABASE_PATH=/data/leads.db` so the DB (and your saved Gmail App Password) survives redeploys. Without this, the DB is recreated empty and no user has IMAP configured.
+
+2. **Save Gmail App Password**  
+   After signup or login, go to **Dashboard → Settings → Gmail App Password**, paste your 16‑character app password, and click **Save**. Ingestion uses only this (not `.env`). If you never click Save, the scheduler finds no users with IMAP configured.
+
+3. **Gmail**  
+   Enable IMAP for the account in Gmail settings. Use a **Gmail App Password** (from Google Account → Security → App passwords), not your normal Gmail password.
+
+4. **Unread**  
+   The app only processes **unread** (UNSEEN) emails. Leave the test email unread in that inbox until the next 2‑minute run, or send a new one.
+
+5. **OPENAI_API_KEY**  
+   If set in Render environment, emails are classified; only those the model considers leads are added. If the key is wrong or the model rejects all, you get 0 leads. Check Render logs for “Classifier kept 0 of N” or “OpenAI error”.
+
+6. **Render logs**  
+   After each 2‑minute run the app logs: “Scheduler run: N user(s) with IMAP configured”, “Fetched N unread email(s)”, “Classifier kept M of N emails as leads”, “Email ingestion run finished. Total leads created: Z”. Use these to see whether the failure is “no users”, “no unread”, “classifier”, or something else.
+
 ### Cold starts (free tier)
 
 - After ~15 minutes of inactivity, the service may sleep.

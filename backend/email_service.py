@@ -461,3 +461,43 @@ def send_test_email(to_email: str) -> dict:
             "success": False,
             "error": str(e)
         }
+
+
+def send_autoreply_lead(
+    to_email: str,
+    lead_name: str,
+    client_phone: str | None,
+    sender_name: str = SENDER_NAME,
+    sender_email: str = SENDER_EMAIL,
+) -> dict:
+    """
+    Send instant autoreply to a new lead: thank you + optional client phone number.
+    Returns dict with success and message/error.
+    """
+    if not resend.api_key:
+        return {"success": False, "error": "RESEND_API_KEY not configured. Set it in your .env file."}
+    name = (lead_name or "there").strip() or "there"
+    if client_phone and (client_phone or "").strip():
+        call_line = f" In the meantime feel free to call {client_phone.strip()}."
+    else:
+        call_line = " In the meantime feel free to give us a call at your convenience."
+    body_text = f"Thank you for reaching out, we are actively working on this.{call_line}"
+    html = f"""<p>Hi {name},</p><p>{body_text}</p><p>Best regards,<br><strong>{sender_name}</strong></p>"""
+    text = f"Hi {name},\n\n{body_text}\n\nBest regards,\n{sender_name}"
+    try:
+        result = resend.Emails.send({
+            "from": f"{sender_name} <{sender_email}>",
+            "to": [to_email],
+            "subject": "We received your inquiry",
+            "html": html,
+            "text": text,
+        })
+        print(f"[autoreply] Sent to {to_email}")
+        return {
+            "success": True,
+            "message": f"Autoreply sent to {to_email}",
+            "email_id": result.get("id") if isinstance(result, dict) else str(result),
+        }
+    except Exception as e:
+        print(f"[autoreply] Failed to send to {to_email}: {e}")
+        return {"success": False, "error": str(e)}

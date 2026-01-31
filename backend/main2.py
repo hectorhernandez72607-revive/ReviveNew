@@ -19,7 +19,8 @@ import re
 load_dotenv()
 
 # Import email service
-from email_service import send_followup_email, send_test_email, generate_followup_copy
+from email_service import send_followup_email, send_test_email, generate_followup_copy, send_autoreply_lead
+from email_service import SENDER_EMAIL, SENDER_NAME
 from email_ingestion import fetch_unread_emails, mark_as_read
 from lead_classifier import classify_leads
 from message_service import send_followup_sms
@@ -113,6 +114,10 @@ def init_db():
             pass
         try:
             c.execute("ALTER TABLE clients ADD COLUMN signature_block TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            c.execute("ALTER TABLE clients ADD COLUMN contact_phone TEXT")
         except sqlite3.OperationalError:
             pass
         try:
@@ -222,28 +227,29 @@ def _row_to_lead(row: tuple) -> dict:
     }
 
 
+def _row_to_client(r) -> dict:
+    return {
+        "id": r[0], "slug": r[1], "name": r[2], "created_at": r[3],
+        "signature_block": r[4] if len(r) > 4 else None,
+        "contact_phone": r[5] if len(r) > 5 else None,
+    }
+
+
 def _fetch_clients(cursor) -> list[dict]:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block FROM clients ORDER BY name")
-    return [
-        {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3], "signature_block": r[4] if len(r) > 4 else None}
-        for r in cursor.fetchall()
-    ]
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone FROM clients ORDER BY name")
+    return [_row_to_client(r) for r in cursor.fetchall()]
 
 
 def _get_client_by_slug(cursor, slug: str) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block FROM clients WHERE slug = ?", (slug,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone FROM clients WHERE slug = ?", (slug,))
     r = cursor.fetchone()
-    if not r:
-        return None
-    return {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3], "signature_block": r[4] if len(r) > 4 else None}
+    return _row_to_client(r) if r else None
 
 
 def _get_client_by_id(cursor, client_id: int) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block FROM clients WHERE id = ?", (client_id,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone FROM clients WHERE id = ?", (client_id,))
     r = cursor.fetchone()
-    if not r:
-        return None
-    return {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3], "signature_block": r[4] if len(r) > 4 else None}
+    return _row_to_client(r) if r else None
 
 
 def _get_user_by_id(cursor, user_id: int) -> dict | None:
@@ -304,11 +310,9 @@ def _get_users_with_imap(cursor) -> list[dict]:
 
 
 def _get_client_by_user_id(cursor, user_id: int) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block FROM clients WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone FROM clients WHERE user_id = ?", (user_id,))
     r = cursor.fetchone()
-    if not r:
-        return None
-    return {"id": r[0], "slug": r[1], "name": r[2], "created_at": r[3], "signature_block": r[4] if len(r) > 4 else None}
+    return _row_to_client(r) if r else None
 
 
 def _get_user_by_client_id(cursor, client_id: int) -> dict | None:
@@ -390,6 +394,29 @@ def _create_lead(
         "inquiry_subject": subj,
         "inquiry_body": body,
     }
+
+
+def _send_autoreply_for_new_lead(conn, c, client_id: int, lead: dict) -> None:
+    """Send instant autoreply to the lead's email. Best-effort; logs on failure."""
+    email_addr = (lead.get("email") or "").strip()
+    if not email_addr or "@" not in email_addr or "@lead.local" in email_addr.lower():
+        return
+    client = _get_client_by_id(c, client_id)
+    if not client:
+        return
+    contact_phone = (client.get("contact_phone") or "").strip() or None
+    try:
+        result = send_autoreply_lead(
+            email_addr,
+            lead.get("name") or "there",
+            contact_phone,
+            SENDER_NAME,
+            SENDER_EMAIL,
+        )
+        if not result.get("success"):
+            print(f"[autoreply] Failed to send to {email_addr}: {result.get('error', 'unknown')}")
+    except Exception as e:
+        print(f"[autoreply] Error sending to {email_addr}: {e}")
 
 
 # --- Follow-up logic ---
@@ -653,9 +680,12 @@ def _run_ingestion_for_inbox(
                     imap_email, imap_password, timeout=timeout_s,
                     max_messages=max_messages,
                 )
+                print(f"[email_ingestion] Fetched {len(emails)} unread email(s) for {client_slug}.")
                 if os.getenv("OPENAI_API_KEY", "").strip():
+                    n_before = len(emails)
                     pred = classify_leads(emails)
                     emails = [e for e, is_lead in zip(emails, pred) if is_lead]
+                    print(f"[email_ingestion] Classifier kept {len(emails)} of {n_before} emails as leads.")
                     if pred and not all(pred):
                         print(f"[email_ingestion] AI classifier filtered to {len(emails)} likely lead(s).")
                 created = 0
@@ -684,6 +714,7 @@ def _run_ingestion_for_inbox(
                         inquiry_subject=em.get("subject"),
                         inquiry_body=em.get("body_snippet"),
                     )
+                    _send_autoreply_for_new_lead(conn, c, client["id"], lead)
                     now = datetime.datetime.now().isoformat()
                     c.execute(
                         "INSERT INTO processed_email_ids (message_id, lead_id, client_id, created_at) VALUES (?, ?, ?, ?)",
@@ -772,6 +803,15 @@ def run_email_ingestion(
         print("[email_ingestion] No users with Gmail App Password set. Skip.")
         return {"ok": True, "created": 0}
 
+    def _mask_email(e: str) -> str:
+        if not e or "@" not in e:
+            return "***"
+        local, at, domain = e.partition("@")
+        return (local[:2] + "***" + at + domain) if len(local) > 2 else ("***" + at + domain)
+
+    masked = [_mask_email(u.get("email") or "") for u in users]
+    print(f"[email_ingestion] Scheduler run: {len(users)} user(s) with IMAP configured: {masked}.")
+
     total_created = 0
     for u in users:
         result = _run_ingestion_for_inbox(
@@ -780,6 +820,7 @@ def run_email_ingestion(
         total_created += result.get("created", 0)
         if not result.get("ok"):
             print(f"[email_ingestion] Inbox {u['email']}: {result.get('error', 'unknown')}")
+    print(f"[email_ingestion] Email ingestion run finished. Total leads created: {total_created}.")
     return {"ok": True, "created": total_created}
 
 
@@ -805,6 +846,7 @@ class ClientCreate(BaseModel):
 
 class ClientUpdate(BaseModel):
     signature_block: str | None = None  # Contact/signature block appended to follow-up emails
+    contact_phone: str | None = None  # Phone number shown in instant autoreply to new leads
 
 
 class ImapSettingsUpdate(BaseModel):
@@ -939,7 +981,7 @@ def signup(body: SignupRequest, db: tuple = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "user": {"id": user["id"], "email": user["email"], "imap_configured": False},
-        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or ""},
+        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or "", "contact_phone": client.get("contact_phone") or ""},
     }
 
 
@@ -961,7 +1003,7 @@ def login(body: LoginRequest, db: tuple = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "user": {"id": user["id"], "email": user["email"], "imap_configured": bool(user.get("imap_app_password"))},
-        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or ""},
+        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or "", "contact_phone": client.get("contact_phone") or ""},
     }
 
 
@@ -977,17 +1019,31 @@ def update_my_client(
     current: dict = Depends(get_current_user),
     db: tuple = Depends(get_db),
 ):
-    """Update the authenticated user's client (e.g. signature/contact block for follow-up emails)."""
+    """Update the authenticated user's client (signature block, contact phone for autoreply)."""
     conn, c = db
     client_id = current["client"]["id"]
-    if body.signature_block is None:
-        return current["client"]
-    # Normalize: store as string, max length to avoid abuse
-    signature_block = (body.signature_block or "").strip()[:2000]
-    c.execute("UPDATE clients SET signature_block = ? WHERE id = ?", (signature_block or None, client_id))
+    if body.signature_block is None and body.contact_phone is None:
+        return _client_safe(current["client"])
+    if body.signature_block is not None:
+        signature_block = (body.signature_block or "").strip()[:2000] or None
+        c.execute("UPDATE clients SET signature_block = ? WHERE id = ?", (signature_block, client_id))
+    if body.contact_phone is not None:
+        contact_phone = (body.contact_phone or "").strip()[:50] or None
+        c.execute("UPDATE clients SET contact_phone = ? WHERE id = ?", (contact_phone, client_id))
     conn.commit()
     updated = _get_client_by_id(c, client_id)
-    return updated or current["client"]
+    return _client_safe(updated) if updated else current["client"]
+
+
+def _client_safe(client: dict) -> dict:
+    """Return client dict with optional fields for API response."""
+    return {
+        "id": client["id"],
+        "slug": client["slug"],
+        "name": client["name"],
+        "signature_block": client.get("signature_block") or "",
+        "contact_phone": client.get("contact_phone") or "",
+    }
 
 
 @app.patch("/me/imap-settings")
@@ -1003,6 +1059,22 @@ def update_my_imap_settings(
     c.execute("UPDATE users SET imap_app_password = ? WHERE id = ?", (value, user_id))
     conn.commit()
     return {"imap_configured": bool(value)}
+
+
+@app.get("/me/ingestion-status")
+def get_ingestion_status(current: dict = Depends(get_current_user)):
+    """Return whether email ingestion is configured and a short message for the dashboard."""
+    user = current.get("user") or {}
+    client = current.get("client")
+    imap_configured = bool(user.get("imap_configured"))
+    client_slug = (client.get("slug") if client else None) or None
+    if not client:
+        message = "No client linked to your account. Contact support."
+    elif not imap_configured:
+        message = "Save your Gmail App Password in Settings to enable email lead ingestion."
+    else:
+        message = "Ingestion is active. Unread emails are checked every 2 minutes."
+    return {"imap_configured": imap_configured, "client_slug": client_slug, "message": message}
 
 
 @app.get("/me/leads")
@@ -1023,7 +1095,7 @@ def add_my_lead(
 ):
     """Add a lead to the authenticated user's client."""
     conn, c = db
-    return _create_lead(
+    lead = _create_lead(
         current["client"]["id"],
         body.name,
         body.email,
@@ -1032,6 +1104,8 @@ def add_my_lead(
         conn,
         c,
     )
+    _send_autoreply_for_new_lead(conn, c, current["client"]["id"], lead)
+    return lead
 
 
 @app.patch("/me/lead/{lead_id}")
@@ -1209,8 +1283,9 @@ def add_client_lead(client_slug: str, body: LeadCreate, db: tuple = Depends(get_
     client = _get_client_by_slug(c, client_slug)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    result = _create_lead(client["id"], body.name, body.email, body.phone, "Manual", conn, c)
-    return result
+    lead = _create_lead(client["id"], body.name, body.email, body.phone, "Manual", conn, c)
+    _send_autoreply_for_new_lead(conn, c, client["id"], lead)
+    return lead
 
 
 @app.post("/webhook/lead/{client_slug}")
@@ -1223,7 +1298,7 @@ def webhook_add_lead(client_slug: str, body: WebhookLeadCreate, db: tuple = Depe
     client = _get_client_by_slug(c, client_slug)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    result = _create_lead(
+    lead = _create_lead(
         client["id"],
         body.name,
         body.email,
@@ -1232,8 +1307,9 @@ def webhook_add_lead(client_slug: str, body: WebhookLeadCreate, db: tuple = Depe
         conn,
         c,
     )
+    _send_autoreply_for_new_lead(conn, c, client["id"], lead)
     print(f"Webhook [{client_slug}]: Lead from {body.source} - {body.name} ({body.email})")
-    return result
+    return lead
 
 
 @app.post("/webhook/twilio/sms")

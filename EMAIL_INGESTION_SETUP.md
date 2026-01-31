@@ -63,10 +63,30 @@ curl -X POST "http://localhost:8000/test/run-email-ingestion"
 
 | Issue | What to check |
 |-------|----------------|
-| “IMAP_EMAIL and IMAP_APP_PASSWORD required” | Both set in `backend/.env`, backend restarted. |
+| “IMAP_EMAIL and IMAP_APP_PASSWORD required” | Both set in `backend/.env`, backend restarted. (On production, ingestion uses **Dashboard Settings** only, not `.env`.) |
 | “Client 'X' not found” | `IMAP_CLIENT_SLUG` matches a real client (e.g. your dashboard slug). |
 | No leads created | Emails are **unread**; sender has a valid **From** address. |
 | Login/IMAP errors | Use the **App Password**, not your normal Gmail password. 2-Step Verification must be on. |
+
+### Email ingestion not working? (checklist)
+
+1. **Persistent DB on Render**  
+   Use a disk and `DATABASE_PATH=/data/leads.db` so the DB (and saved Gmail App Password) survives redeploys. See `DEPLOYMENT.md`.
+
+2. **Save Gmail App Password**  
+   After signup/login, go to **Dashboard → Settings → Gmail App Password**, paste the 16‑char app password, click **Save**. Ingestion uses only this (not `.env` on production).
+
+3. **Gmail**  
+   Enable IMAP for the account; use an App Password, not your normal password.
+
+4. **Unread**  
+   The app only processes UNSEEN emails. Leave the test email unread until ingestion runs (every 2 minutes).
+
+5. **OPENAI_API_KEY**  
+   If set, emails are classified; if the key is wrong or the model rejects all, you get 0 leads. Check Render logs for “Classifier kept 0 of N” or “OpenAI error”.
+
+6. **Render logs**  
+   Check logs for the next 2‑minute run: “No users …”, “Fetched N unread”, “Classifier kept M of N”, “Total leads created: Z”. That shows whether the failure is “no users”, “no unread”, “classifier”, or “created 0” for another reason.
 
 ---
 
