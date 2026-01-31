@@ -69,8 +69,21 @@ def _extract_phone(body: str) -> str:
     return (m.group(0).strip() if m else "")[:50]
 
 
+def _strip_html(html: str) -> str:
+    """Remove HTML tags and collapse whitespace for use in body text."""
+    if not html:
+        return ""
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
 def _get_body(msg: Message) -> str:
-    body = ""
+    """Extract full body text. For multipart, combines text/plain and stripped text/html
+    so the classifier sees complete content (many emails put the real message only in HTML).
+    """
+    plain_parts: list[str] = []
+    html_parts: list[str] = []
     if msg.is_multipart():
         for part in msg.walk():
             ctype = part.get_content_type()
@@ -78,21 +91,32 @@ def _get_body(msg: Message) -> str:
                 try:
                     payload = part.get_payload(decode=True)
                     if payload:
-                        body += payload.decode("utf-8", errors="replace")
+                        plain_parts.append(payload.decode("utf-8", errors="replace"))
                 except Exception:
                     pass
-            elif ctype == "text/html" and not body:
+            elif ctype == "text/html":
                 try:
                     payload = part.get_payload(decode=True)
                     if payload:
-                        body += payload.decode("utf-8", errors="replace")
+                        html_parts.append(payload.decode("utf-8", errors="replace"))
                 except Exception:
                     pass
+        plain = " ".join(plain_parts).strip()
+        html_text = " ".join(_strip_html(h) for h in html_parts).strip()
+        if plain and html_text:
+            body = f"{plain} {html_text}"
+        else:
+            body = plain or html_text
     else:
+        body = ""
         try:
             payload = msg.get_payload(decode=True)
             if payload:
-                body = payload.decode("utf-8", errors="replace")
+                raw = payload.decode("utf-8", errors="replace")
+                if (msg.get_content_type() or "").lower() == "text/html":
+                    body = _strip_html(raw)
+                else:
+                    body = raw
         except Exception:
             pass
     return body

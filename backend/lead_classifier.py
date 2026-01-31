@@ -53,13 +53,12 @@ EXCLUDE_TERMS = (
     "you're receiving this because", "you are receiving this because",
     "update your preferences", "unsubscribe from", "preferences center",
     "remove from list", "sent to you because", "update subscription",
-    # Meeting / calendar / forwards / non-sales
-    "reminder", "meeting invite", "meeting invitation", "calendar invite",
+    # Meeting / calendar / forwards / non-sales (don't exclude "zoom"/"teams" etc. — real inquiries often ask for a call)
+    "meeting invite", "meeting invitation", "calendar invite",
     "invited you to", "you're invited", "event invite", "rsvp",
     "forwarded", "fwd:", "fwd :",
     "thread", "conversation", "internal", "cc:", "bcc:",
     "survey", "feedback request", "please take our survey",
-    "scheduled for", "reschedule", "meeting scheduled", "zoom", "teams meeting",
     "google calendar", "outlook calendar", "add to calendar", "add to your calendar",
 )
 
@@ -69,7 +68,7 @@ EXCLUDE_SENDER_PATTERNS = (
     "notification", "notifications", "alert", "alerts", "mailer-daemon",
     "postmaster", "bounce", "bounces", "auto@", "automated@", "system@",
     "newsletter", "news@", "marketing@", "promo@", "digest@", "mailer@",
-    "calendar", "reminders", "invite",
+    "calendar", "reminders",
 )
 
 
@@ -98,7 +97,7 @@ def _build_prompt(emails: list[dict]) -> str:
     for i, em in enumerate(emails, 1):
         from_ = f"{em.get('name') or '?'} <{em.get('email') or '?'}>"
         subj = (em.get("subject") or "")[:250]
-        body = (em.get("body_snippet") or "")[:600]
+        body = (em.get("body_snippet") or "")[:1200]
         blocks.append(f"--- Email {i} ---\nFROM: {from_}\nSUBJECT: {subj}\nBODY: {body}")
     emails_text = "\n\n".join(blocks)
     return """You are a very strict lead classifier for a small business. Your default is NO. When in doubt, say NO.
