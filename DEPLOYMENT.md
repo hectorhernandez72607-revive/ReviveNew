@@ -160,3 +160,4 @@ After deployment:
 2. **Add payment** (when ready):
    - Integrate Stripe or another payment provider
    - Use your production URL for webhooks and redirects
+   - **Landing → payment → web app:** On the landing page, "Start Now" links to your Stripe Payment Link. In **Stripe Dashboard → Payment links → your link → After payment**, set the success URL to your web app signup so payment takes users to the app, e.g. `https://YOUR-APP.onrender.com/signup.html?payment=success`

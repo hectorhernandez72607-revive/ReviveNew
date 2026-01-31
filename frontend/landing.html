@@ -1,15 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Landing</title>
-  <link rel="stylesheet" href="landing.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Never Lose a Lead Again</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing.css">
 </head>
 <body>
-  <main>
-    <h1>Landing</h1>
-    <p>Add your website content here.</p>
-  </main>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="header-brand">
+        <span class="logo">Revive</span>
+        <svg class="ecg-line" viewBox="0 0 120 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path class="ecg-path" d="M0 12 L20 12 L24 12 L28 4 L32 12 L36 12 L60 12 L66 6 L72 12 L78 18 L84 12 L120 12" />
+        </svg>
+      </div>
+      <nav class="header-nav">
+        <a href="index.html">Dashboard</a>
+        <a href="login.html">Log in</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <h1>Never Lose Another Lead</h1>
+    <p class="hero-sub">Revive automatically follows up, recovers lost leads, and shows you how much revenue it brings back.</p>
+    <p class="hero-stat">Teams typically recover a meaningful slice of otherwise-lost revenue within the first month.</p>
+    <a href="#pricing" class="cta cta-hero">Get Started</a>
+  </section>
+
+  <!-- TRUSTED BY -->
+  <section class="trusted">
+    <p class="trusted-label">Trusted by teams like yours</p>
+    <div class="trusted-logos">
+      <div class="logo-placeholder">Company</div>
+      <div class="logo-placeholder">Company</div>
+      <div class="logo-placeholder">Company</div>
+      <div class="logo-placeholder">Company</div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how">
+    <h2>How It Works</h2>
+    <div class="steps">
+      <div class="step">
+        <h3>1. Capture</h3>
+        <p>We track every inbound lead from your forms, ads, or CRM.</p>
+      </div>
+      <div class="step">
+        <h3>2. Enforce Follow-Up</h3>
+        <p>If a lead isn’t contacted, Revive reminds your team or follows up automatically.</p>
+      </div>
+      <div class="step">
+        <h3>3. Recover Revenue</h3>
+        <p>When a deal closes after our intervention, we show you the money recovered.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- VALUE -->
+  <section class="value">
+    <h2>Why Businesses Use Revive</h2>
+    <ul class="value-list">
+      <li><span class="check">✓</span> No more missed leads</li>
+      <li><span class="check">✓</span> Faster response times</li>
+      <li><span class="check">✓</span> Automated follow-ups</li>
+      <li><span class="check">✓</span> Clear revenue attribution</li>
+    </ul>
+  </section>
+
+  <!-- TESTIMONIAL -->
+  <section class="testimonial">
+    <blockquote class="testimonial-quote">“Revive helped us stop dropping balls. We now catch leads we used to lose, and we can see exactly how much revenue came back.”</blockquote>
+    <p class="testimonial-attribution">— Name, Title, Company</p>
+  </section>
+
+  <!-- PRICING -->
+  <section class="pricing" id="pricing">
+    <h2>Pricing</h2>
+
+    <div class="pricing-grid">
+      <div class="price-box">
+        <span class="price-badge">Most popular</span>
+        <h3>Growth Plan</h3>
+        <p class="price">$300 <span class="price-period">/ month</span></p>
+        <p class="price-note">Billed monthly · Cancel anytime</p>
+        <ul>
+          <li>Unlimited leads</li>
+          <li>Automated follow-ups</li>
+          <li>Revenue recovered tracking</li>
+          <li>Email & reminder enforcement</li>
+        </ul>
+        <!-- In Stripe: set Payment Link "After payment" URL to: same origin + /signup.html?payment=success -->
+        <a href="https://buy.stripe.com/test_bJe9AV9mHauu4BofBp0Ba02" class="cta cta-primary" target="_blank" rel="noopener noreferrer">Start Now</a>
+      </div>
+
+      <div class="price-box price-box-alt">
+        <h3>Pro Plan</h3>
+        <p class="price">$600 <span class="price-period">/ month</span></p>
+        <p class="price-note">Billed monthly · Cancel anytime</p>
+        <ul>
+          <li>Everything in Growth</li>
+          <li>Priority support</li>
+          <li>API access</li>
+          <li>Custom integrations</li>
+        </ul>
+        <!-- Replace href="#" with your Stripe link when ready -->
+        <a href="#" class="cta cta-primary cta-secondary" target="_blank" rel="noopener noreferrer">Start Now</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-links">
+      <a href="index.html">Dashboard</a>
+      <a href="signup.html">Sign up</a>
+      <a href="login.html">Log in</a>
+      <a href="#">Terms</a>
+      <a href="#">Privacy</a>
+    </div>
+    <p>© 2026 REVIVE. All rights reserved.</p>
+  </footer>
+
+  <script>
+    document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+      anchor.addEventListener('click', function (e) {
+        var id = this.getAttribute('href');
+        if (id === '#') return;
+        var target = document.querySelector(id);
+        if (!target) return;
+        e.preventDefault();
+
+        var duration = 1100;
+        var start = window.pageYOffset;
+        var end = target.getBoundingClientRect().top + start;
+        var startTime = performance.now();
+
+        function step(now) {
+          var elapsed = now - startTime;
+          var progress = Math.min(elapsed / duration, 1);
+          var ease = 1 - Math.pow(1 - progress, 3);
+          window.scrollTo(0, start + (end - start) * ease);
+          if (progress < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+      });
+    });
+  </script>
 </body>
 </html>

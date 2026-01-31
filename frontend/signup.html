@@ -10,6 +10,7 @@
     <div class="auth-box">
       <h1>Create your account</h1>
       <p class="auth-sub">Your partner sent you here. Sign up to access your dashboard.</p>
+      <div id="paymentSuccessMessage" class="payment-success-message" style="display: none;"></div>
       <div id="errorMessage" class="error-message" style="display: none;"></div>
       <form id="signupForm">
         <div class="form-group">
@@ -33,6 +34,17 @@
   </div>
   <script>
     var API = window.location.origin;
+
+    (function checkPaymentSuccess() {
+      var params = new URLSearchParams(window.location.search);
+      if (params.get('payment') === 'success') {
+        var el = document.getElementById('paymentSuccessMessage');
+        if (el) {
+          el.textContent = 'Thanks for your payment! Create your account below to access your dashboard.';
+          el.style.display = 'block';
+        }
+      }
+    })();
 
     function showError(message) {
       var errorEl = document.getElementById('errorMessage');
