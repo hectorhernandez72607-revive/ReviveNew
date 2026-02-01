@@ -306,11 +306,13 @@ def generate_autoreply_copy(
     sender_name: str,
     inquiry_subject: str | None = None,
     inquiry_body: str | None = None,
+    client_pricing: str | None = None,
 ) -> dict | None:
     """
     Generate a short, AI-tailored instant reply subject and body for a new lead.
-    References what they asked about; 1-2 sentences + we're on it. Returns None on
-    failure or when no OpenAI key (caller should use generic autoreply).
+    References what they asked about; 1-2 sentences + we're on it. When the lead
+    asks about pricing/cost/rates and client_pricing is provided, include that pricing
+    in the reply. Returns None on failure or when no OpenAI key (caller should use generic autoreply).
     """
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if not api_key:
@@ -324,6 +326,11 @@ def generate_autoreply_copy(
         return None
     subj_snippet = (inquiry_subject or "")[:150].strip()
     body_snippet = (inquiry_body or "")[:500].strip()
+    pricing_note = ""
+    if client_pricing and (client_pricing or "").strip():
+        pricing_note = f"""
+- The business's pricing (use ONLY if the lead asked about price/cost/rates; include it in the body exactly as below):
+{client_pricing.strip()[:800]}"""
     model = (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
     prompt = f"""You are writing a very short instant-reply email from a small business to someone who just reached out. This is the immediate acknowledgment—reference what they asked and say we're on it. Sound like a real person, not a bot.
 
@@ -333,10 +340,11 @@ What they wrote:
 
 Context:
 - Lead's name: {lead_name}
-- Sender (business) name: {sender_name}
+- Sender (business) name: {sender_name}{pricing_note}
 
 Write a single instant-reply email. Rules:
-- 1-2 sentences only. Acknowledge their message (e.g. "Thanks for asking about..." or "Got your note about...") and say we're on it and will get back to them shortly. Do NOT include a phone number or "call us"—the caller will add that.
+- 1-2 sentences only (or 3 if you include pricing because they asked). Acknowledge their message (e.g. "Thanks for asking about..." or "Got your note about..."). If they asked about pricing/cost/rates and pricing was provided above, include that pricing in your reply—use it exactly as given. Otherwise say we're on it and will get back to them shortly. Do NOT include a phone number or "call us"—the caller will add that.
+- Use the lead's name at most ONCE in the body (e.g. do not say "Hi [name]" or repeat their name—the greeting "Hi [name]" is added automatically before your body). Sound natural and human; one name use or none is best.
 - Subject line: under 50 chars. Use "Re: ..." or "Thanks for reaching out" style.
 - No marketing fluff. No "We received your inquiry."
 
@@ -545,6 +553,7 @@ def send_autoreply_lead(
     inquiry_subject: str | None = None,
     inquiry_body: str | None = None,
     reply_to: str | None = None,
+    client_pricing: str | None = None,
 ) -> dict:
     """
     Send instant autoreply to a new lead. When inquiry_subject/body are provided,
@@ -568,6 +577,7 @@ def send_autoreply_lead(
         sender_name=sender_name,
         inquiry_subject=inquiry_subject,
         inquiry_body=inquiry_body,
+        client_pricing=client_pricing,
     )
     if ai_copy and (ai_copy.get("subject") or "").strip() and (ai_copy.get("body") or "").strip():
         subject = (ai_copy["subject"] or subject).strip()[:200]

@@ -121,6 +121,10 @@ def init_db():
         except sqlite3.OperationalError:
             pass
         try:
+            c.execute("ALTER TABLE clients ADD COLUMN pricing TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
             c.execute("ALTER TABLE users ADD COLUMN imap_app_password TEXT")
         except sqlite3.OperationalError:
             pass
@@ -232,22 +236,23 @@ def _row_to_client(r) -> dict:
         "id": r[0], "slug": r[1], "name": r[2], "created_at": r[3],
         "signature_block": r[4] if len(r) > 4 else None,
         "contact_phone": r[5] if len(r) > 5 else None,
+        "pricing": r[6] if len(r) > 6 else None,
     }
 
 
 def _fetch_clients(cursor) -> list[dict]:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone FROM clients ORDER BY name")
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing FROM clients ORDER BY name")
     return [_row_to_client(r) for r in cursor.fetchall()]
 
 
 def _get_client_by_slug(cursor, slug: str) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone FROM clients WHERE slug = ?", (slug,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing FROM clients WHERE slug = ?", (slug,))
     r = cursor.fetchone()
     return _row_to_client(r) if r else None
 
 
 def _get_client_by_id(cursor, client_id: int) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone FROM clients WHERE id = ?", (client_id,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing FROM clients WHERE id = ?", (client_id,))
     r = cursor.fetchone()
     return _row_to_client(r) if r else None
 
@@ -310,7 +315,7 @@ def _get_users_with_imap(cursor) -> list[dict]:
 
 
 def _get_client_by_user_id(cursor, user_id: int) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone FROM clients WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing FROM clients WHERE user_id = ?", (user_id,))
     r = cursor.fetchone()
     return _row_to_client(r) if r else None
 
@@ -411,6 +416,7 @@ def _send_autoreply_for_new_lead(conn, c, client_id: int, lead: dict) -> None:
     reply_to_email = (user.get("email") or "").strip() if user else None
     if reply_to_email and "@" not in reply_to_email:
         reply_to_email = None
+    client_pricing = (client.get("pricing") or "").strip() or None
     try:
         result = send_autoreply_lead(
             email_addr,
@@ -421,6 +427,7 @@ def _send_autoreply_for_new_lead(conn, c, client_id: int, lead: dict) -> None:
             inquiry_subject=lead.get("inquiry_subject"),
             inquiry_body=lead.get("inquiry_body"),
             reply_to=reply_to_email,
+            client_pricing=client_pricing,
         )
         if not result.get("success"):
             print(f"[autoreply] Failed to send to {email_addr}: {result.get('error', 'unknown')}")
@@ -856,6 +863,7 @@ class ClientCreate(BaseModel):
 class ClientUpdate(BaseModel):
     signature_block: str | None = None  # Contact/signature block appended to follow-up emails
     contact_phone: str | None = None  # Phone number shown in instant autoreply to new leads
+    pricing: str | None = None  # Pricing info; included in instant autoreply when lead asks for it
 
 
 class ImapSettingsUpdate(BaseModel):
@@ -990,7 +998,7 @@ def signup(body: SignupRequest, db: tuple = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "user": {"id": user["id"], "email": user["email"], "imap_configured": False},
-        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or "", "contact_phone": client.get("contact_phone") or ""},
+        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or "", "contact_phone": client.get("contact_phone") or "", "pricing": client.get("pricing") or ""},
     }
 
 
@@ -1012,7 +1020,7 @@ def login(body: LoginRequest, db: tuple = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "user": {"id": user["id"], "email": user["email"], "imap_configured": bool(user.get("imap_app_password"))},
-        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or "", "contact_phone": client.get("contact_phone") or ""},
+        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or "", "contact_phone": client.get("contact_phone") or "", "pricing": client.get("pricing") or ""},
     }
 
 
@@ -1028,10 +1036,10 @@ def update_my_client(
     current: dict = Depends(get_current_user),
     db: tuple = Depends(get_db),
 ):
-    """Update the authenticated user's client (signature block, contact phone for autoreply)."""
+    """Update the authenticated user's client (signature block, contact phone, pricing for autoreply)."""
     conn, c = db
     client_id = current["client"]["id"]
-    if body.signature_block is None and body.contact_phone is None:
+    if body.signature_block is None and body.contact_phone is None and body.pricing is None:
         return _client_safe(current["client"])
     if body.signature_block is not None:
         signature_block = (body.signature_block or "").strip()[:2000] or None
@@ -1039,6 +1047,9 @@ def update_my_client(
     if body.contact_phone is not None:
         contact_phone = (body.contact_phone or "").strip()[:50] or None
         c.execute("UPDATE clients SET contact_phone = ? WHERE id = ?", (contact_phone, client_id))
+    if body.pricing is not None:
+        pricing = (body.pricing or "").strip()[:2000] or None
+        c.execute("UPDATE clients SET pricing = ? WHERE id = ?", (pricing, client_id))
     conn.commit()
     updated = _get_client_by_id(c, client_id)
     return _client_safe(updated) if updated else current["client"]
@@ -1052,6 +1063,7 @@ def _client_safe(client: dict) -> dict:
         "name": client["name"],
         "signature_block": client.get("signature_block") or "",
         "contact_phone": client.get("contact_phone") or "",
+        "pricing": client.get("pricing") or "",
     }
 
 

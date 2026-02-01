@@ -159,6 +159,15 @@
           <button type="button" id="settingsContactPhoneSaveBtn" class="btn">Save</button>
         </div>
         <div class="panel-card">
+          <h3>Pricing (for instant autoreply)</h3>
+          <p class="connect-form-desc">If a lead asks about pricing, cost, or rates in their message, the instant reply can include this info. Leave blank to skip.</p>
+          <div class="connect-form-row">
+            <label for="settingsPricing">Your pricing</label>
+            <textarea id="settingsPricing" class="signature-textarea" rows="4" placeholder="e.g. $299/month &#10;or: Starter $99, Pro $299, Enterprise custom"></textarea>
+          </div>
+          <button type="button" id="settingsPricingSaveBtn" class="btn">Save</button>
+        </div>
+        <div class="panel-card">
           <h3>Email signature / contact block</h3>
           <p class="connect-form-desc">This text is added at the bottom of each follow-up email to leads (e.g. your phone, address, website).</p>
           <div class="connect-form-row">
@@ -663,6 +672,7 @@
       var slugEl = document.getElementById('settingsClientSlug');
       var sigEl = document.getElementById('settingsSignatureBlock');
       var contactPhoneEl = document.getElementById('settingsContactPhone');
+      var pricingEl = document.getElementById('settingsPricing');
       var imapStatusEl = document.getElementById('settingsImapStatus');
       var imapInputEl = document.getElementById('settingsImapPassword');
       if (currentClient) {
@@ -672,11 +682,13 @@
         }
         if (sigEl) sigEl.value = currentClient.signature_block || '';
         if (contactPhoneEl) contactPhoneEl.value = currentClient.contact_phone || '';
+        if (pricingEl) pricingEl.value = currentClient.pricing || '';
       } else {
         if (nameEl) nameEl.textContent = '—';
         if (slugEl) slugEl.innerHTML = '<code>—</code>';
         if (sigEl) sigEl.value = '';
         if (contactPhoneEl) contactPhoneEl.value = '';
+        if (pricingEl) pricingEl.value = '';
       }
       if (imapStatusEl) imapStatusEl.textContent = (currentUser && currentUser.imap_configured) ? 'Gmail App Password is set.' : 'Not set. Add a Gmail App Password to enable email lead ingestion.';
       if (imapInputEl) imapInputEl.value = '';
@@ -887,6 +899,40 @@
           .finally(function () {
             settingsContactPhoneSaveBtn.disabled = false;
             if (settingsContactPhoneSaveBtn.textContent === 'Saving…') settingsContactPhoneSaveBtn.textContent = 'Save';
+          });
+      });
+    }
+
+    var settingsPricingSaveBtn = document.getElementById('settingsPricingSaveBtn');
+    var settingsPricingEl = document.getElementById('settingsPricing');
+    if (settingsPricingSaveBtn && settingsPricingEl) {
+      settingsPricingSaveBtn.addEventListener('click', function () {
+        var value = settingsPricingEl.value.trim();
+        settingsPricingSaveBtn.disabled = true;
+        settingsPricingSaveBtn.textContent = 'Saving…';
+        fetch(API + '/me/client', {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ pricing: value || null })
+        })
+          .then(function (res) {
+            if (res.status === 401) { clearAuth(); return null; }
+            if (!res.ok) throw new Error(res.status === 400 ? 'Invalid input' : 'Server error');
+            return res.json();
+          })
+          .then(function (client) {
+            if (!client) return;
+            if (currentClient) currentClient.pricing = client.pricing != null ? client.pricing : '';
+            settingsPricingSaveBtn.textContent = 'Saved';
+            setTimeout(function () { settingsPricingSaveBtn.textContent = 'Save'; }, 2000);
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert('Failed to save. Try again.');
+          })
+          .finally(function () {
+            settingsPricingSaveBtn.disabled = false;
+            if (settingsPricingSaveBtn.textContent === 'Saving…') settingsPricingSaveBtn.textContent = 'Save';
           });
       });
     }
