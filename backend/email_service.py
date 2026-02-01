@@ -301,6 +301,79 @@ Line 2: BODY: <your email body>"""
         return None
 
 
+def generate_autoreply_copy(
+    lead_name: str,
+    sender_name: str,
+    inquiry_subject: str | None = None,
+    inquiry_body: str | None = None,
+) -> dict | None:
+    """
+    Generate a short, AI-tailored instant reply subject and body for a new lead.
+    References what they asked about; 1-2 sentences + we're on it. Returns None on
+    failure or when no OpenAI key (caller should use generic autoreply).
+    """
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        return None
+    try:
+        import openai
+    except ImportError:
+        return None
+    has_inquiry = bool((inquiry_subject or "").strip() or (inquiry_body or "").strip())
+    if not has_inquiry:
+        return None
+    subj_snippet = (inquiry_subject or "")[:150].strip()
+    body_snippet = (inquiry_body or "")[:500].strip()
+    model = (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
+    prompt = f"""You are writing a very short instant-reply email from a small business to someone who just reached out. This is the immediate acknowledgment—reference what they asked and say we're on it. Sound like a real person, not a bot.
+
+What they wrote:
+- Subject: {subj_snippet or "(no subject)"}
+- Message: {body_snippet or "(no message)"}
+
+Context:
+- Lead's name: {lead_name}
+- Sender (business) name: {sender_name}
+
+Write a single instant-reply email. Rules:
+- 1-2 sentences only. Acknowledge their message (e.g. "Thanks for asking about..." or "Got your note about...") and say we're on it and will get back to them shortly. Do NOT include a phone number or "call us"—the caller will add that.
+- Subject line: under 50 chars. Use "Re: ..." or "Thanks for reaching out" style.
+- No marketing fluff. No "We received your inquiry."
+
+Reply with exactly two lines:
+Line 1: SUBJECT: <your subject line>
+Line 2: BODY: <your email body>"""
+    try:
+        client = openai.OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=120,
+            temperature=0.5,
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        subject = ""
+        body = ""
+        for line in raw.splitlines():
+            line_stripped = line.strip()
+            if line_stripped.upper().startswith("SUBJECT:"):
+                subject = line_stripped[8:].strip().strip('"').strip("'")[:200]
+            elif line_stripped.upper().startswith("BODY:"):
+                body = line_stripped[5:].strip().strip('"').strip("'")[:600]
+        if not body and raw:
+            lines = [l.strip() for l in raw.splitlines() if l.strip()]
+            if len(lines) >= 1:
+                subject = (lines[0].strip('"').strip("'")[:200]) if not subject else subject
+            if len(lines) >= 2:
+                body = "\n\n".join(lines[1:]).strip()[:600]
+        if subject and body:
+            return {"subject": subject, "body": body}
+        return None
+    except Exception as e:
+        print(f"[autoreply AI] OpenAI error: {e}. Using generic autoreply.")
+        return None
+
+
 def _plain_to_simple_html(text: str) -> str:
     """Convert plain text body to minimal HTML (paragraphs)."""
     if not text:
@@ -469,9 +542,15 @@ def send_autoreply_lead(
     client_phone: str | None,
     sender_name: str = SENDER_NAME,
     sender_email: str = SENDER_EMAIL,
+    inquiry_subject: str | None = None,
+    inquiry_body: str | None = None,
+    reply_to: str | None = None,
 ) -> dict:
     """
-    Send instant autoreply to a new lead: thank you + optional client phone number.
+    Send instant autoreply to a new lead. When inquiry_subject/body are provided,
+    uses AI to tailor the message; otherwise uses generic "we received your inquiry" + optional phone.
+    From = sender_name + sender_email (your verified Resend address). When reply_to is set,
+    replies from the lead go to that address (e.g. client owner email).
     Returns dict with success and message/error.
     """
     if not resend.api_key:
@@ -481,17 +560,32 @@ def send_autoreply_lead(
         call_line = f" In the meantime feel free to call {client_phone.strip()}."
     else:
         call_line = " In the meantime feel free to give us a call at your convenience."
+
+    subject = "We received your inquiry"
     body_text = f"Thank you for reaching out, we are actively working on this.{call_line}"
+    ai_copy = generate_autoreply_copy(
+        lead_name=name,
+        sender_name=sender_name,
+        inquiry_subject=inquiry_subject,
+        inquiry_body=inquiry_body,
+    )
+    if ai_copy and (ai_copy.get("subject") or "").strip() and (ai_copy.get("body") or "").strip():
+        subject = (ai_copy["subject"] or subject).strip()[:200]
+        body_text = ((ai_copy["body"] or "").strip() + call_line).strip()[:800]
+
     html = f"""<p>Hi {name},</p><p>{body_text}</p><p>Best regards,<br><strong>{sender_name}</strong></p>"""
     text = f"Hi {name},\n\n{body_text}\n\nBest regards,\n{sender_name}"
+    payload = {
+        "from": f"{sender_name} <{sender_email}>",
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+        "text": text,
+    }
+    if reply_to and (reply_to or "").strip() and "@" in (reply_to or "").strip():
+        payload["reply_to"] = (reply_to or "").strip()
     try:
-        result = resend.Emails.send({
-            "from": f"{sender_name} <{sender_email}>",
-            "to": [to_email],
-            "subject": "We received your inquiry",
-            "html": html,
-            "text": text,
-        })
+        result = resend.Emails.send(payload)
         print(f"[autoreply] Sent to {to_email}")
         return {
             "success": True,

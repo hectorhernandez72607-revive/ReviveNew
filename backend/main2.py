@@ -397,7 +397,7 @@ def _create_lead(
 
 
 def _send_autoreply_for_new_lead(conn, c, client_id: int, lead: dict) -> None:
-    """Send instant autoreply to the lead's email. Best-effort; logs on failure."""
+    """Send instant autoreply to the lead's email. From = verified sender + client name; Reply-To = client owner email. Best-effort; logs on failure."""
     email_addr = (lead.get("email") or "").strip()
     if not email_addr or "@" not in email_addr or "@lead.local" in email_addr.lower():
         return
@@ -405,13 +405,22 @@ def _send_autoreply_for_new_lead(conn, c, client_id: int, lead: dict) -> None:
     if not client:
         return
     contact_phone = (client.get("contact_phone") or "").strip() or None
+    # Display as from the client (business name); replies go to owner email
+    display_name = (client.get("name") or "").strip() or SENDER_NAME
+    user = _get_user_by_client_id(c, client_id)
+    reply_to_email = (user.get("email") or "").strip() if user else None
+    if reply_to_email and "@" not in reply_to_email:
+        reply_to_email = None
     try:
         result = send_autoreply_lead(
             email_addr,
             lead.get("name") or "there",
             contact_phone,
-            SENDER_NAME,
-            SENDER_EMAIL,
+            sender_name=display_name,
+            sender_email=SENDER_EMAIL,
+            inquiry_subject=lead.get("inquiry_subject"),
+            inquiry_body=lead.get("inquiry_body"),
+            reply_to=reply_to_email,
         )
         if not result.get("success"):
             print(f"[autoreply] Failed to send to {email_addr}: {result.get('error', 'unknown')}")
