@@ -344,6 +344,7 @@ Context:
 
 Write a single instant-reply email. Rules:
 - 1-2 sentences only (or 3 if you include pricing because they asked). Acknowledge their message (e.g. "Thanks for asking about..." or "Got your note about..."). If they asked about pricing/cost/rates and pricing was provided above, include that pricing in your reply—use it exactly as given. Otherwise say we're on it and will get back to them shortly. Do NOT include a phone number or "call us"—the caller will add that.
+- If their message mentions a type of event (e.g. wedding, birthday, corporate event, school event, graduation, party), acknowledge that event in your reply to sound personal (e.g. "Thanks for reaching out about your wedding" or "Got your note about the corporate event—we're on it").
 - Use the lead's name at most ONCE in the body (e.g. do not say "Hi [name]" or repeat their name—the greeting "Hi [name]" is added automatically before your body). Sound natural and human; one name use or none is best.
 - Subject line: under 50 chars. Use "Re: ..." or "Thanks for reaching out" style.
 - No marketing fluff. No "We received your inquiry."
