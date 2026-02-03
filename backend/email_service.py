@@ -569,9 +569,9 @@ def send_autoreply_lead(
         return {"success": False, "error": "RESEND_API_KEY not configured. Set it in your .env file."}
     name = (lead_name or "there").strip() or "there"
     if client_phone and (client_phone or "").strip():
-        call_line = f" In the meantime feel free to call {client_phone.strip()}."
+        call_line = f" Feel free to reply to this email with any other questions you may have or feel free to call/text {client_phone.strip()}!"
     else:
-        call_line = " In the meantime feel free to give us a call at your convenience."
+        call_line = " Feel free to reply to this email with any other questions you may have or feel free to call/text us at your convenience!"
 
     subject = "We received your inquiry"
     body_text = f"Thank you for reaching out, we are actively working on this.{call_line}"
