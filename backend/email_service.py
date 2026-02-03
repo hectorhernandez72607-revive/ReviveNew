@@ -555,12 +555,14 @@ def send_autoreply_lead(
     inquiry_body: str | None = None,
     reply_to: str | None = None,
     client_pricing: str | None = None,
+    bcc: str | None = None,
 ) -> dict:
     """
     Send instant autoreply to a new lead. When inquiry_subject/body are provided,
     uses AI to tailor the message; otherwise uses generic "we received your inquiry" + optional phone.
     From = sender_name + sender_email (your verified Resend address). When reply_to is set,
-    replies from the lead go to that address (e.g. client owner email).
+    replies from the lead go to that address (e.g. client owner email). When bcc is set
+    (e.g. owner email), that address receives a copy of the email sent to the lead.
     Returns dict with success and message/error.
     """
     if not resend.api_key:
@@ -595,6 +597,8 @@ def send_autoreply_lead(
     }
     if reply_to and (reply_to or "").strip() and "@" in (reply_to or "").strip():
         payload["reply_to"] = (reply_to or "").strip()
+    if bcc and (bcc or "").strip() and "@" in (bcc or "").strip():
+        payload["bcc"] = [(bcc or "").strip()]
     try:
         result = resend.Emails.send(payload)
         print(f"[autoreply] Sent to {to_email}")

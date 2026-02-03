@@ -428,6 +428,7 @@ def _send_autoreply_for_new_lead(conn, c, client_id: int, lead: dict) -> None:
             inquiry_body=lead.get("inquiry_body"),
             reply_to=reply_to_email,
             client_pricing=client_pricing,
+            bcc=reply_to_email,
         )
         if not result.get("success"):
             print(f"[autoreply] Failed to send to {email_addr}: {result.get('error', 'unknown')}")
