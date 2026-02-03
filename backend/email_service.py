@@ -432,6 +432,7 @@ def send_followup_email(
     body_plain: str | None = None,
     body_html: str | None = None,
     signature_block: str | None = None,
+    logo: str | None = None,
 ) -> dict:
     """
     Send a follow-up email to a lead.
@@ -473,6 +474,12 @@ def send_followup_email(
             subject = formatted["subject"]
             html = formatted["html"]
             text = formatted["text"]
+        
+        # Prepend logo at top if set (data URL; do not escape, data URLs are safe in quoted attr)
+        if logo and isinstance(logo, str) and logo.strip().startswith("data:image/") and len(logo) <= 150000:
+            logo_src = logo.strip().replace('"', "%22")
+            logo_html = f'<p style="margin-bottom:16px;"><img src="{logo_src}" alt="Logo" style="max-width:200px;height:auto;" /></p>'
+            html = logo_html + html
         
         # Append client's signature/contact block at bottom if set
         if signature_block and signature_block.strip():
@@ -565,6 +572,7 @@ def send_autoreply_lead(
     client_saved_info: str | None = None,
     bcc: str | None = None,
     signature_block: str | None = None,
+    logo: str | None = None,
 ) -> dict:
     """
     Send instant autoreply to a new lead. When inquiry_subject/body are provided,
@@ -597,7 +605,12 @@ def send_autoreply_lead(
         subject = (ai_copy["subject"] or subject).strip()[:200]
         body_text = ((ai_copy["body"] or "").strip() + call_line).strip()[:800]
 
+    logo_html = ""
+    if logo and isinstance(logo, str) and logo.strip().startswith("data:image/") and len(logo) <= 150000:
+        logo_src = logo.strip().replace('"', "%22")
+        logo_html = f'<p style="margin-bottom:16px;"><img src="{logo_src}" alt="Logo" style="max-width:200px;height:auto;" /></p>'
     html = f"""<p>Hi {name},</p><p>{body_text}</p><p>Best regards,<br><strong>{sender_name}</strong></p>"""
+    html = logo_html + html
     text = f"Hi {name},\n\n{body_text}\n\nBest regards,\n{sender_name}"
     if signature_block and signature_block.strip():
         sig = signature_block.strip()

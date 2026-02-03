@@ -186,6 +186,21 @@
           </div>
           <button type="button" id="settingsSignatureSaveBtn" class="btn">Save</button>
         </div>
+        <div class="panel-card">
+          <h3>Logo (for emails)</h3>
+          <p class="connect-form-desc">Upload an image to show at the top of instant replies and follow-up emails. Max 100 KB. PNG or JPG.</p>
+          <div class="connect-form-row">
+            <label>Logo image</label>
+            <input type="file" id="settingsLogoFile" accept="image/png,image/jpeg,image/jpg,image/gif" class="connect-form-input">
+            <div id="settingsLogoPreviewWrap" class="connect-form-desc" style="margin-top:8px;display:none;">
+              <img id="settingsLogoPreview" alt="Logo preview" style="max-width:200px;height:auto;border:1px solid #e1e3e5;border-radius:6px;">
+              <div style="margin-top:8px;">
+                <button type="button" id="settingsLogoClearBtn" class="btn btn-small">Clear logo</button>
+              </div>
+            </div>
+          </div>
+          <button type="button" id="settingsLogoSaveBtn" class="btn">Save</button>
+        </div>
         <div class="connect-form-card" id="connectFormCard">
           <h3>Connect your Google Form</h3>
           <p class="connect-form-desc">Send leads from your form to this dashboard. Use this webhook in your form&rsquo;s Apps Script.</p>
@@ -313,6 +328,7 @@
     var dashboardEl = document.getElementById('dashboardWrap');
     var authCheckEl = document.getElementById('authCheck');
     var currentClient = null;
+    var pendingLogoDataUrl = undefined;
     var currentUser = null;
     var cachedLeads = [];
 
@@ -695,6 +711,17 @@
         if (contactPhoneEl) contactPhoneEl.value = currentClient.contact_phone || '';
         if (pricingEl) pricingEl.value = currentClient.pricing || '';
         if (savedInfoEl) savedInfoEl.value = currentClient.saved_info || '';
+        var logoPreview = document.getElementById('settingsLogoPreview');
+        var logoPreviewWrap = document.getElementById('settingsLogoPreviewWrap');
+        if (logoPreview && logoPreviewWrap) {
+          if (currentClient.logo) {
+            logoPreview.src = currentClient.logo;
+            logoPreviewWrap.style.display = 'block';
+          } else {
+            logoPreview.src = '';
+            logoPreviewWrap.style.display = 'none';
+          }
+        }
       } else {
         if (nameEl) nameEl.textContent = '—';
         if (slugEl) slugEl.innerHTML = '<code>—</code>';
@@ -702,7 +729,11 @@
         if (contactPhoneEl) contactPhoneEl.value = '';
         if (pricingEl) pricingEl.value = '';
         if (savedInfoEl) savedInfoEl.value = '';
+        var logoPreviewWrap = document.getElementById('settingsLogoPreviewWrap');
+        if (logoPreviewWrap) logoPreviewWrap.style.display = 'none';
       }
+      var logoFileInput = document.getElementById('settingsLogoFile');
+      if (logoFileInput) logoFileInput.value = '';
       if (imapStatusEl) imapStatusEl.textContent = (currentUser && currentUser.imap_configured) ? 'Gmail App Password is set.' : 'Not set. Add a Gmail App Password to enable email lead ingestion.';
       if (imapInputEl) imapInputEl.value = '';
     }
@@ -980,6 +1011,78 @@
           .finally(function () {
             settingsSavedInfoSaveBtn.disabled = false;
             if (settingsSavedInfoSaveBtn.textContent === 'Saving…') settingsSavedInfoSaveBtn.textContent = 'Save';
+          });
+      });
+    }
+
+    var settingsLogoFile = document.getElementById('settingsLogoFile');
+    var settingsLogoPreview = document.getElementById('settingsLogoPreview');
+    var settingsLogoPreviewWrap = document.getElementById('settingsLogoPreviewWrap');
+    var settingsLogoClearBtn = document.getElementById('settingsLogoClearBtn');
+    var settingsLogoSaveBtn = document.getElementById('settingsLogoSaveBtn');
+    var MAX_LOGO_BYTES = 100 * 1024;
+    if (settingsLogoFile) {
+      settingsLogoFile.addEventListener('change', function () {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        if (file.size > MAX_LOGO_BYTES) {
+          alert('Image must be 100 KB or smaller. Choose a smaller image.');
+          this.value = '';
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function () {
+          var dataUrl = reader.result;
+          pendingLogoDataUrl = dataUrl;
+          if (settingsLogoPreview) settingsLogoPreview.src = dataUrl;
+          if (settingsLogoPreviewWrap) settingsLogoPreviewWrap.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    if (settingsLogoClearBtn) {
+      settingsLogoClearBtn.addEventListener('click', function () {
+        pendingLogoDataUrl = null;
+        if (settingsLogoFile) settingsLogoFile.value = '';
+        if (settingsLogoPreview) settingsLogoPreview.src = '';
+        if (settingsLogoPreviewWrap) settingsLogoPreviewWrap.style.display = 'none';
+      });
+    }
+    if (settingsLogoSaveBtn) {
+      settingsLogoSaveBtn.addEventListener('click', function () {
+        var toSend = pendingLogoDataUrl !== undefined ? (pendingLogoDataUrl === null ? '' : pendingLogoDataUrl) : (currentClient && currentClient.logo) || null;
+        settingsLogoSaveBtn.disabled = true;
+        settingsLogoSaveBtn.textContent = 'Saving…';
+        fetch(API + '/me/client', {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ logo: toSend })
+        })
+          .then(function (res) {
+            if (res.status === 401) { clearAuth(); return null; }
+            if (!res.ok) throw new Error(res.status === 400 ? 'Invalid image' : 'Server error');
+            return res.json();
+          })
+          .then(function (client) {
+            if (!client) return;
+            if (currentClient) currentClient.logo = client.logo != null ? client.logo : '';
+            pendingLogoDataUrl = undefined;
+            var prevEl = document.getElementById('settingsLogoPreview');
+            var wrapEl = document.getElementById('settingsLogoPreviewWrap');
+            if (currentClient && currentClient.logo && prevEl && wrapEl) {
+              prevEl.src = currentClient.logo;
+              wrapEl.style.display = 'block';
+            } else if (wrapEl) wrapEl.style.display = 'none';
+            settingsLogoSaveBtn.textContent = 'Saved';
+            setTimeout(function () { settingsLogoSaveBtn.textContent = 'Save'; }, 2000);
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert('Failed to save. Try again.');
+          })
+          .finally(function () {
+            settingsLogoSaveBtn.disabled = false;
+            if (settingsLogoSaveBtn.textContent === 'Saving…') settingsLogoSaveBtn.textContent = 'Save';
           });
       });
     }
