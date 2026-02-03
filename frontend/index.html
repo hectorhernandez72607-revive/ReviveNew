@@ -169,6 +169,15 @@
           <button type="button" id="settingsPricingSaveBtn" class="btn">Save</button>
         </div>
         <div class="panel-card">
+          <h3>Saved info (for instant reply)</h3>
+          <p class="connect-form-desc">Facts the AI can use when relevant to a lead&rsquo;s inquiry (e.g. availability, policies, services, FAQs). Only included in the instant reply when the inquiry clearly relates.</p>
+          <div class="connect-form-row">
+            <label for="settingsSavedInfo">Saved info</label>
+            <textarea id="settingsSavedInfo" class="signature-textarea" rows="4" placeholder="e.g. We offer 4-hour and 8-hour packages. Weekend availability limited. Deposit required to hold date."></textarea>
+          </div>
+          <button type="button" id="settingsSavedInfoSaveBtn" class="btn">Save</button>
+        </div>
+        <div class="panel-card">
           <h3>Email signature / contact block</h3>
           <p class="connect-form-desc">This text is added at the bottom of each follow-up email to leads (e.g. your phone, address, website).</p>
           <div class="connect-form-row">
@@ -674,6 +683,7 @@
       var sigEl = document.getElementById('settingsSignatureBlock');
       var contactPhoneEl = document.getElementById('settingsContactPhone');
       var pricingEl = document.getElementById('settingsPricing');
+      var savedInfoEl = document.getElementById('settingsSavedInfo');
       var imapStatusEl = document.getElementById('settingsImapStatus');
       var imapInputEl = document.getElementById('settingsImapPassword');
       if (currentClient) {
@@ -684,12 +694,14 @@
         if (sigEl) sigEl.value = currentClient.signature_block || '';
         if (contactPhoneEl) contactPhoneEl.value = currentClient.contact_phone || '';
         if (pricingEl) pricingEl.value = currentClient.pricing || '';
+        if (savedInfoEl) savedInfoEl.value = currentClient.saved_info || '';
       } else {
         if (nameEl) nameEl.textContent = '—';
         if (slugEl) slugEl.innerHTML = '<code>—</code>';
         if (sigEl) sigEl.value = '';
         if (contactPhoneEl) contactPhoneEl.value = '';
         if (pricingEl) pricingEl.value = '';
+        if (savedInfoEl) savedInfoEl.value = '';
       }
       if (imapStatusEl) imapStatusEl.textContent = (currentUser && currentUser.imap_configured) ? 'Gmail App Password is set.' : 'Not set. Add a Gmail App Password to enable email lead ingestion.';
       if (imapInputEl) imapInputEl.value = '';
@@ -934,6 +946,40 @@
           .finally(function () {
             settingsPricingSaveBtn.disabled = false;
             if (settingsPricingSaveBtn.textContent === 'Saving…') settingsPricingSaveBtn.textContent = 'Save';
+          });
+      });
+    }
+
+    var settingsSavedInfoSaveBtn = document.getElementById('settingsSavedInfoSaveBtn');
+    var settingsSavedInfoEl = document.getElementById('settingsSavedInfo');
+    if (settingsSavedInfoSaveBtn && settingsSavedInfoEl) {
+      settingsSavedInfoSaveBtn.addEventListener('click', function () {
+        var value = settingsSavedInfoEl.value.trim();
+        settingsSavedInfoSaveBtn.disabled = true;
+        settingsSavedInfoSaveBtn.textContent = 'Saving…';
+        fetch(API + '/me/client', {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ saved_info: value || null })
+        })
+          .then(function (res) {
+            if (res.status === 401) { clearAuth(); return null; }
+            if (!res.ok) throw new Error(res.status === 400 ? 'Invalid input' : 'Server error');
+            return res.json();
+          })
+          .then(function (client) {
+            if (!client) return;
+            if (currentClient) currentClient.saved_info = client.saved_info != null ? client.saved_info : '';
+            settingsSavedInfoSaveBtn.textContent = 'Saved';
+            setTimeout(function () { settingsSavedInfoSaveBtn.textContent = 'Save'; }, 2000);
+          })
+          .catch(function (err) {
+            console.error(err);
+            alert('Failed to save. Try again.');
+          })
+          .finally(function () {
+            settingsSavedInfoSaveBtn.disabled = false;
+            if (settingsSavedInfoSaveBtn.textContent === 'Saving…') settingsSavedInfoSaveBtn.textContent = 'Save';
           });
       });
     }

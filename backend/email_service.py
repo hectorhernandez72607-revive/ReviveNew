@@ -307,12 +307,14 @@ def generate_autoreply_copy(
     inquiry_subject: str | None = None,
     inquiry_body: str | None = None,
     client_pricing: str | None = None,
+    client_saved_info: str | None = None,
 ) -> dict | None:
     """
     Generate a short, AI-tailored instant reply subject and body for a new lead.
     References what they asked about; 1-2 sentences + we're on it. When the lead
     asks about pricing/cost/rates and client_pricing is provided, include that pricing
-    in the reply. Returns None on failure or when no OpenAI key (caller should use generic autoreply).
+    in the reply. When client_saved_info is provided, the AI may integrate it when
+    relevant to the inquiry. Returns None on failure or when no OpenAI key (caller should use generic autoreply).
     """
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if not api_key:
@@ -331,6 +333,11 @@ def generate_autoreply_copy(
         pricing_note = f"""
 - The business's pricing (use ONLY if the lead asked about price/cost/rates; include it in the body exactly as below):
 {client_pricing.strip()[:800]}"""
+    saved_info_note = ""
+    if client_saved_info and (client_saved_info or "").strip():
+        saved_info_note = f"""
+- Saved info about the business (use ONLY when the lead's inquiry clearly relates; integrate naturally in 1 short phrase or sentence if relevant—e.g. FAQs, policies, services, availability):
+{client_saved_info.strip()[:800]}"""
     model = (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
     prompt = f"""You are writing a very short instant-reply email from a small business to someone who just reached out. This is the immediate acknowledgment—reference what they asked and say we're on it. Sound like a real person, not a bot.
 
@@ -340,10 +347,10 @@ What they wrote:
 
 Context:
 - Lead's name: {lead_name}
-- Sender (business) name: {sender_name}{pricing_note}
+- Sender (business) name: {sender_name}{pricing_note}{saved_info_note}
 
 Write a single instant-reply email. Rules:
-- 1-2 sentences only (or 3 if you include pricing because they asked). Acknowledge their message (e.g. "Thanks for asking about..." or "Got your note about..."). If they asked about pricing/cost/rates and pricing was provided above, include that pricing in your reply—use it exactly as given. Otherwise say we're on it and will get back to them shortly. Do NOT include a phone number or "call us"—the caller will add that.
+- 1-2 sentences only (or 3 if you include pricing because they asked, or a short saved-info detail that fits). Acknowledge their message (e.g. "Thanks for asking about..." or "Got your note about..."). If they asked about pricing/cost/rates and pricing was provided above, include that pricing in your reply—use it exactly as given. If saved info was provided and their inquiry clearly relates (e.g. they ask about availability, policies, services), you may integrate one short relevant detail naturally. Otherwise say we're on it and will get back to them shortly. Do NOT include a phone number or "call us"—the caller will add that.
 - If their message mentions a type of event (e.g. wedding, birthday, corporate event, school event, graduation, party), acknowledge that event in your reply to sound personal (e.g. "Thanks for reaching out about your wedding" or "Got your note about the corporate event—we're on it").
 - Use the lead's name at most ONCE in the body (e.g. do not say "Hi [name]" or repeat their name—the greeting "Hi [name]" is added automatically before your body). Sound natural and human; one name use or none is best.
 - Subject line: under 50 chars. Use "Re: ..." or "Thanks for reaching out" style.
@@ -555,7 +562,9 @@ def send_autoreply_lead(
     inquiry_body: str | None = None,
     reply_to: str | None = None,
     client_pricing: str | None = None,
+    client_saved_info: str | None = None,
     bcc: str | None = None,
+    signature_block: str | None = None,
 ) -> dict:
     """
     Send instant autoreply to a new lead. When inquiry_subject/body are provided,
@@ -563,6 +572,7 @@ def send_autoreply_lead(
     From = sender_name + sender_email (your verified Resend address). When reply_to is set,
     replies from the lead go to that address (e.g. client owner email). When bcc is set
     (e.g. owner email), that address receives a copy of the email sent to the lead.
+    When signature_block is set, it is appended at the bottom (contact block).
     Returns dict with success and message/error.
     """
     if not resend.api_key:
@@ -581,6 +591,7 @@ def send_autoreply_lead(
         inquiry_subject=inquiry_subject,
         inquiry_body=inquiry_body,
         client_pricing=client_pricing,
+        client_saved_info=client_saved_info,
     )
     if ai_copy and (ai_copy.get("subject") or "").strip() and (ai_copy.get("body") or "").strip():
         subject = (ai_copy["subject"] or subject).strip()[:200]
@@ -588,6 +599,12 @@ def send_autoreply_lead(
 
     html = f"""<p>Hi {name},</p><p>{body_text}</p><p>Best regards,<br><strong>{sender_name}</strong></p>"""
     text = f"Hi {name},\n\n{body_text}\n\nBest regards,\n{sender_name}"
+    if signature_block and signature_block.strip():
+        sig = signature_block.strip()
+        text = text.rstrip() + "\n\n" + sig
+        sig_html = _escape_html(sig).replace("\n", "<br>")
+        sig_p = f"<p style='margin-top:1em;white-space:pre-wrap;font-size:14px;'>{sig_html}</p>"
+        html = html.rstrip() + sig_p
     payload = {
         "from": f"{sender_name} <{sender_email}>",
         "to": [to_email],
