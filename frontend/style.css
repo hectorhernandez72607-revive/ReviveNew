@@ -349,6 +349,22 @@ body {
   background: var(--shopify-primary-hover);
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--shopify-text);
+  border: 1px solid var(--shopify-border);
+}
+
+.btn-secondary:hover {
+  background: var(--shopify-surface);
+}
+
 /* SCORECARDS — Shopify analytics KPI cards */
 .cards {
   display: grid;

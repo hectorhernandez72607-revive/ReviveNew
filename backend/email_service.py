@@ -196,6 +196,7 @@ def generate_followup_copy(
     inquiry_subject: str | None = None,
     inquiry_body: str | None = None,
     is_weekly: bool = False,
+    writing_style_example: str | None = None,
 ) -> dict | None:
     """
     Generate human-sounding follow-up subject and body using OpenAI.
@@ -215,13 +216,16 @@ def generate_followup_copy(
     which = ["first", "second", "third"][min(followup_number, 2)]
     source_note = f" They came in via {lead_source}." if lead_source and lead_source != "Manual" else ""
     has_inquiry = bool((inquiry_subject or "").strip() or (inquiry_body or "").strip())
+    style_note = ""
+    if writing_style_example and (writing_style_example or "").strip():
+        style_note = f"\n- Match this owner's writing style (tonality, vocabulary, wording):\n{writing_style_example.strip()[:2000]}"
 
     if is_weekly:
         prompt = f"""You are writing a short, human weekly check-in email from a small business owner to a potential customer. We've reached out before and haven't heard back—this is a gentle, non-pushy check-in.
 
 Context:
 - Lead's name: {lead_name}
-- Sender name: {sender_name}
+- Sender name: {sender_name}{style_note}
 
 Write a brief weekly check-in. Rules:
 - 2–3 sentences. Friendly, low pressure. "Just checking in" or "Still here if you need anything."
@@ -242,7 +246,7 @@ What the lead wrote:
 
 Context:
 - Lead's name: {lead_name}
-- Sender (business) name: {sender_name}
+- Sender (business) name: {sender_name}{style_note}
 
 Write a single reply email. Rules:
 - Reference what they asked (e.g. "Thanks for asking about..." or "Re: [their topic]"). Answer or acknowledge their question and offer a next step (e.g. a quick call, more info, or "let me know if you'd like to...").
@@ -259,7 +263,7 @@ Line 2: BODY: <your email body>"""
 Context:
 - Lead's name: {lead_name}
 - This is the {which} follow-up (they haven't replied yet).{source_note}
-- Sender name: {sender_name}
+- Sender name: {sender_name}{style_note}
 
 Write a single follow-up email. Rules:
 - 2–4 sentences max. One clear ask: reply or suggest a time for a quick call.
@@ -308,6 +312,7 @@ def generate_autoreply_copy(
     inquiry_body: str | None = None,
     client_pricing: str | None = None,
     client_saved_info: str | None = None,
+    client_example_email: str | None = None,
 ) -> dict | None:
     """
     Generate a short, AI-tailored instant reply subject and body for a new lead.
@@ -336,10 +341,15 @@ def generate_autoreply_copy(
     saved_info_note = ""
     if client_saved_info and (client_saved_info or "").strip():
         saved_info_note = f"""
-- Saved info about the business (use ONLY when the lead's inquiry clearly relates; integrate naturally in 1 short phrase or sentence if relevant—e.g. FAQs, policies, services, availability):
+- Saved info about the business (include at least one relevant detail from this in your reply when it fits what they asked—e.g. availability, packages, policies, deposit. Weave it in naturally so the reply feels personal and helpful; pick the most relevant line or detail, don't list everything):
 {client_saved_info.strip()[:800]}"""
+    style_note = ""
+    if client_example_email and (client_example_email or "").strip():
+        style_note = f"""
+- Example of how the business owner writes (match this tonality, vocabulary, and wording so the reply sounds like them):
+{client_example_email.strip()[:2000]}"""
     model = (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
-    prompt = f"""You are writing a very short instant-reply email from a small business to someone who just reached out. This is the immediate acknowledgment—reference what they asked and say we're on it. Sound like a real person, not a bot.
+    prompt = f"""You are writing a short, friendly instant-reply email from a small business owner to someone who just reached out. Sound like a real person who's glad they wrote—warm, conversational, and helpful. No corporate or robotic phrases.
 
 What they wrote:
 - Subject: {subj_snippet or "(no subject)"}
@@ -347,14 +357,14 @@ What they wrote:
 
 Context:
 - Lead's name: {lead_name}
-- Sender (business) name: {sender_name}{pricing_note}{saved_info_note}
+- Sender (business) name: {sender_name}{pricing_note}{saved_info_note}{style_note}
 
 Write a single instant-reply email. Rules:
-- 1-2 sentences only (or 3 if you include pricing because they asked, or a short saved-info detail that fits). Acknowledge their message (e.g. "Thanks for asking about..." or "Got your note about..."). If they asked about pricing/cost/rates and pricing was provided above, include that pricing in your reply—use it exactly as given. If saved info was provided and their inquiry clearly relates (e.g. they ask about availability, policies, services), you may integrate one short relevant detail naturally. Otherwise say we're on it and will get back to them shortly. Do NOT include a phone number or "call us"—the caller will add that.
-- If their message mentions a type of event (e.g. wedding, birthday, corporate event, school event, graduation, party), acknowledge that event in your reply to sound personal (e.g. "Thanks for reaching out about your wedding" or "Got your note about the corporate event—we're on it").
-- Use the lead's name at most ONCE in the body (e.g. do not say "Hi [name]" or repeat their name—the greeting "Hi [name]" is added automatically before your body). Sound natural and human; one name use or none is best.
-- Subject line: under 50 chars. Use "Re: ..." or "Thanks for reaching out" style.
-- No marketing fluff. No "We received your inquiry."
+- Keep it short: 1–3 sentences. Acknowledge what they said in a friendly way (e.g. "So glad you reached out about...", "Thanks for your note—we'd love to help with...", "Got it, and we're on it!"). If they asked about pricing/cost/rates and pricing was provided above, include that pricing in your reply—use it exactly as given. When saved info is provided above, include at least one relevant detail from it in your reply when it fits (e.g. availability, packages, policies)—weave it in naturally so the reply feels personal and helpful. Do NOT include a phone number or "call us"; the caller will add that.
+- If their message mentions an event (wedding, birthday, corporate event, graduation, party, etc.), acknowledge it so it feels personal (e.g. "Thanks for reaching out about your wedding—congrats!" or "We'd love to help with the corporate event.").
+- Use the lead's name at most ONCE in the body (the greeting "Hi [name]" is added automatically before your body). Sound natural and human.
+- Subject line: under 50 chars. Friendly and direct (e.g. "Re: ..." or "Thanks for reaching out!").
+- Tone: warm, friendly, human. Avoid "We received your inquiry," "Thank you for your interest," or other stiff phrases. Write like a real person.
 
 Reply with exactly two lines:
 Line 1: SUBJECT: <your subject line>
@@ -364,8 +374,8 @@ Line 2: BODY: <your email body>"""
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=120,
-            temperature=0.5,
+            max_tokens=180,
+            temperature=0.65,
         )
         raw = (resp.choices[0].message.content or "").strip()
         subject = ""
@@ -570,6 +580,7 @@ def send_autoreply_lead(
     reply_to: str | None = None,
     client_pricing: str | None = None,
     client_saved_info: str | None = None,
+    client_example_email: str | None = None,
     bcc: str | None = None,
     signature_block: str | None = None,
     logo: str | None = None,
@@ -600,6 +611,7 @@ def send_autoreply_lead(
         inquiry_body=inquiry_body,
         client_pricing=client_pricing,
         client_saved_info=client_saved_info,
+        client_example_email=client_example_email,
     )
     if ai_copy and (ai_copy.get("subject") or "").strip() and (ai_copy.get("body") or "").strip():
         subject = (ai_copy["subject"] or subject).strip()[:200]

@@ -133,6 +133,10 @@ def init_db():
         except sqlite3.OperationalError:
             pass
         try:
+            c.execute("ALTER TABLE clients ADD COLUMN example_email TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
             c.execute("ALTER TABLE users ADD COLUMN imap_app_password TEXT")
         except sqlite3.OperationalError:
             pass
@@ -247,22 +251,23 @@ def _row_to_client(r) -> dict:
         "pricing": r[6] if len(r) > 6 else None,
         "saved_info": r[7] if len(r) > 7 else None,
         "logo": r[8] if len(r) > 8 else None,
+        "example_email": r[9] if len(r) > 9 else None,
     }
 
 
 def _fetch_clients(cursor) -> list[dict]:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing, saved_info, logo FROM clients ORDER BY name")
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing, saved_info, logo, example_email FROM clients ORDER BY name")
     return [_row_to_client(r) for r in cursor.fetchall()]
 
 
 def _get_client_by_slug(cursor, slug: str) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing, saved_info, logo FROM clients WHERE slug = ?", (slug,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing, saved_info, logo, example_email FROM clients WHERE slug = ?", (slug,))
     r = cursor.fetchone()
     return _row_to_client(r) if r else None
 
 
 def _get_client_by_id(cursor, client_id: int) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing, saved_info, logo FROM clients WHERE id = ?", (client_id,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing, saved_info, logo, example_email FROM clients WHERE id = ?", (client_id,))
     r = cursor.fetchone()
     return _row_to_client(r) if r else None
 
@@ -325,7 +330,7 @@ def _get_users_with_imap(cursor) -> list[dict]:
 
 
 def _get_client_by_user_id(cursor, user_id: int) -> dict | None:
-    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing, saved_info, logo FROM clients WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT id, slug, name, created_at, signature_block, contact_phone, pricing, saved_info, logo, example_email FROM clients WHERE user_id = ?", (user_id,))
     r = cursor.fetchone()
     return _row_to_client(r) if r else None
 
@@ -428,6 +433,7 @@ def _send_autoreply_for_new_lead(conn, c, client_id: int, lead: dict) -> None:
         reply_to_email = None
     client_pricing = (client.get("pricing") or "").strip() or None
     client_saved_info = (client.get("saved_info") or "").strip() or None
+    client_example_email = (client.get("example_email") or "").strip() or None
     signature_block = (client.get("signature_block") or "").strip() or None
     logo = (client.get("logo") or "").strip() or None
     try:
@@ -442,6 +448,7 @@ def _send_autoreply_for_new_lead(conn, c, client_id: int, lead: dict) -> None:
             reply_to=reply_to_email,
             client_pricing=client_pricing,
             client_saved_info=client_saved_info,
+            client_example_email=client_example_email,
             bcc=reply_to_email,
             signature_block=signature_block,
             logo=logo,
@@ -486,7 +493,7 @@ def is_older_than_7_days_since(last_contacted: str | None) -> bool:
     return t <= datetime.datetime.now() - datetime.timedelta(days=7)
 
 
-def followup(lead: dict, conn: sqlite3.Connection, from_email: str | None = None, from_name: str | None = None, signature_block: str = "", logo: str | None = None) -> bool:
+def followup(lead: dict, conn: sqlite3.Connection, from_email: str | None = None, from_name: str | None = None, signature_block: str = "", logo: str | None = None, example_email: str | None = None) -> bool:
     """
     Send the first (and only scheduled) follow-up: 24h after lead creation if the client
     hasn't already contacted. Sends via SMS for source=Messages (when phone present),
@@ -533,6 +540,7 @@ def followup(lead: dict, conn: sqlite3.Connection, from_email: str | None = None
             lead_source=lead.get("source"),
             inquiry_subject=lead.get("inquiry_subject"),
             inquiry_body=lead.get("inquiry_body"),
+            writing_style_example=example_email,
         )
         if ai_copy:
             result = send_followup_email(
@@ -586,6 +594,7 @@ def weekly_followup(
     from_name: str | None = None,
     signature_block: str = "",
     logo: str | None = None,
+    example_email: str | None = None,
 ) -> bool:
     """
     Send a weekly check-in when it's been 7+ days since last_contacted.
@@ -613,6 +622,7 @@ def weekly_followup(
             inquiry_subject=lead.get("inquiry_subject"),
             inquiry_body=lead.get("inquiry_body"),
             is_weekly=True,
+            writing_style_example=example_email,
         )
         if ai_copy:
             result = send_followup_email(
@@ -655,6 +665,7 @@ def _run_followups_for_client(client_id: int, client_slug: str):
         client_name = client["name"] if client else None
         signature_block = (client.get("signature_block") or "").strip() if client else ""
         logo = (client.get("logo") or "").strip() or None if client else None
+        example_email = (client.get("example_email") or "").strip() or None if client else None
         user = _get_user_by_client_id(c, client_id)
         from_email = user["email"] if user else None
         from_name = client_name or (user["email"].split("@")[0] if user else None)
@@ -675,7 +686,7 @@ def _run_followups_for_client(client_id: int, client_slug: str):
         # One scheduled follow-up at 24h after lead creation (if client hasn't contacted)
         if (lead.get("followups_sent") or 0) == 0:
             with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-                if followup(lead, conn, from_email=from_email, from_name=from_name, signature_block=signature_block, logo=logo):
+                if followup(lead, conn, from_email=from_email, from_name=from_name, signature_block=signature_block, logo=logo, example_email=example_email):
                     continue  # sent; followup() already updated lead
         # Weekly follow-up: 7+ days since last contact (any number of follow-ups already sent)
         if is_older_than_7_days_since(lead.get("last_contacted")):
@@ -683,7 +694,7 @@ def _run_followups_for_client(client_id: int, client_slug: str):
                 c2 = conn.cursor()
                 lead_refresh = _get_lead_by_id_and_client(c2, lead["id"], client_id)
                 if lead_refresh:
-                    if weekly_followup(lead_refresh, conn, from_email=from_email, from_name=from_name, signature_block=signature_block, logo=logo):
+                    if weekly_followup(lead_refresh, conn, from_email=from_email, from_name=from_name, signature_block=signature_block, logo=logo, example_email=example_email):
                         pass  # already updated in weekly_followup
 
 
@@ -889,6 +900,7 @@ class ClientUpdate(BaseModel):
     pricing: str | None = None  # Pricing info; included in instant autoreply when lead asks for it
     saved_info: str | None = None  # Saved info; AI may integrate in instant reply when relevant to inquiry
     logo: str | None = None  # Logo image as data URL (data:image/...); shown at top of emails
+    example_email: str | None = None  # Example of owner's email; AI matches tonality, vocabulary, wording
 
 
 class ImapSettingsUpdate(BaseModel):
@@ -967,7 +979,7 @@ async def lifespan(app: FastAPI):
         print("⚠️  TEST ENDPOINTS enabled. Set ENABLE_TEST_ENDPOINTS=false in production.")
     scheduler = BackgroundScheduler()
     scheduler.add_job(central_loop, "interval", hours=1)
-    scheduler.add_job(run_email_ingestion, "interval", minutes=2)
+    scheduler.add_job(run_email_ingestion, "interval", minutes=1)
     scheduler.start()
     yield
     scheduler.shutdown()
@@ -1023,7 +1035,7 @@ def signup(body: SignupRequest, db: tuple = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "user": {"id": user["id"], "email": user["email"], "imap_configured": False},
-        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or "", "contact_phone": client.get("contact_phone") or "", "pricing": client.get("pricing") or "", "saved_info": client.get("saved_info") or "", "logo": client.get("logo") or ""},
+        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or "", "contact_phone": client.get("contact_phone") or "", "pricing": client.get("pricing") or "", "saved_info": client.get("saved_info") or "", "logo": client.get("logo") or "", "example_email": client.get("example_email") or ""},
     }
 
 
@@ -1045,7 +1057,7 @@ def login(body: LoginRequest, db: tuple = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "user": {"id": user["id"], "email": user["email"], "imap_configured": bool(user.get("imap_app_password"))},
-        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or "", "contact_phone": client.get("contact_phone") or "", "pricing": client.get("pricing") or "", "saved_info": client.get("saved_info") or "", "logo": client.get("logo") or ""},
+        "client": {"id": client["id"], "slug": client["slug"], "name": client["name"], "signature_block": client.get("signature_block") or "", "contact_phone": client.get("contact_phone") or "", "pricing": client.get("pricing") or "", "saved_info": client.get("saved_info") or "", "logo": client.get("logo") or "", "example_email": client.get("example_email") or ""},
     }
 
 
@@ -1064,7 +1076,7 @@ def update_my_client(
     """Update the authenticated user's client (signature block, contact phone, pricing, saved info, logo for autoreply)."""
     conn, c = db
     client_id = current["client"]["id"]
-    if body.signature_block is None and body.contact_phone is None and body.pricing is None and body.saved_info is None and body.logo is None:
+    if body.signature_block is None and body.contact_phone is None and body.pricing is None and body.saved_info is None and body.logo is None and body.example_email is None:
         return _client_safe(current["client"])
     if body.signature_block is not None:
         signature_block = (body.signature_block or "").strip()[:2000] or None
@@ -1085,6 +1097,9 @@ def update_my_client(
         elif body.logo == "" or (isinstance(body.logo, str) and not body.logo.strip()):
             logo_val = None
         c.execute("UPDATE clients SET logo = ? WHERE id = ?", (logo_val, client_id))
+    if body.example_email is not None:
+        example_email = (body.example_email or "").strip()[:3000] or None
+        c.execute("UPDATE clients SET example_email = ? WHERE id = ?", (example_email, client_id))
     conn.commit()
     updated = _get_client_by_id(c, client_id)
     return _client_safe(updated) if updated else current["client"]
@@ -1101,6 +1116,7 @@ def _client_safe(client: dict) -> dict:
         "pricing": client.get("pricing") or "",
         "saved_info": client.get("saved_info") or "",
         "logo": client.get("logo") or "",
+        "example_email": client.get("example_email") or "",
     }
 
 
@@ -1131,7 +1147,7 @@ def get_ingestion_status(current: dict = Depends(get_current_user)):
     elif not imap_configured:
         message = "Save your Gmail App Password in Settings to enable email lead ingestion."
     else:
-        message = "Ingestion is active. Unread emails are checked every 2 minutes."
+        message = "Ingestion is active. Unread emails are checked every 1 minute."
     return {"imap_configured": imap_configured, "client_slug": client_slug, "message": message}
 
 
